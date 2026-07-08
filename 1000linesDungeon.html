@@ -1,0 +1,1673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <title>Polished Dungeon Crawler</title>
+    <style>
+        :root {
+            --bg-primary: #121212;
+            --bg-secondary: #1e1e1e;
+            --bg-tertiary: #2a2a2a;
+            --text-primary: #e0e0e0;
+            --text-secondary: #a0a0a0;
+            --accent-player: #ffd700;
+            --accent-enemy: #ff5555;
+            --accent-item: #55ff55;
+            --accent-stairs: #55aaff;
+            --accent-wall: #444444;
+            --accent-floor: #2a2a2a;
+            --hp-color: #ff5555;
+            --mp-color: #5555ff;
+            --hunger-color: #ffaa55;
+            --gold-color: #ffd700;
+            --font-main: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .light-theme {
+            --bg-primary: #f5f5f5;
+            --bg-secondary: #e0e0e0;
+            --bg-tertiary: #d0d0d0;
+            --text-primary: #121212;
+            --text-secondary: #444444;
+            --accent-player: #ff8c00;
+            --accent-enemy: #cc0000;
+            --accent-item: #006600;
+            --accent-stairs: #0066cc;
+            --accent-wall: #666666;
+            --accent-floor: #e0e0e0;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            user-select: none;
+            touch-action: manipulation;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        #game-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            width: 100vw;
+            position: relative;
+        }
+
+        #header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background-color: var(--bg-secondary);
+            border-bottom: 1px solid var(--accent-wall);
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        #stats {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .stat {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-size: 12px;
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 10px;
+            text-transform: uppercase;
+        }
+
+        .stat-bar-container {
+            width: 100px;
+            height: 12px;
+            background-color: var(--bg-tertiary);
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .stat-bar {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        #hp-bar { background-color: var(--hp-color); }
+        #mp-bar { background-color: var(--mp-color); }
+        #hunger-bar { background-color: var(--hunger-color); }
+
+        .stat-value {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            font-size: 10px;
+            color: var(--text-primary);
+            line-height: 12px;
+        }
+
+        #gold-display {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 14px;
+        }
+
+        #depth-display {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 14px;
+        }
+
+        #game {
+            flex-grow: 1;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(32px, 1fr));
+            grid-template-rows: repeat(auto-fill, minmax(32px, 1fr));
+            gap: 1px;
+            background-color: var(--accent-wall);
+            padding: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .tile {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 20px;
+            background-color: var(--accent-floor);
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s, background-color 0.2s;
+        }
+
+        .tile:hover {
+            transform: scale(1.05);
+            z-index: 1;
+        }
+
+        .tile-wall { background-color: var(--accent-wall); }
+        .tile-floor { background-color: var(--accent-floor); }
+        .tile-forest { background-color: #228B22; }
+        .tile-cave { background-color: #555; }
+        .tile-ruins { background-color: #666; }
+
+        .entity {
+            position: absolute;
+            font-size: 24px;
+            transition: transform 0.2s;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        .entity-player { color: var(--accent-player); }
+        .entity-enemy { color: var(--accent-enemy); }
+        .entity-item { color: var(--accent-item); }
+        .entity-stairs { color: var(--accent-stairs); }
+        .entity-trap { color: #ff55ff; }
+        .entity-corpse { color: #888; }
+
+        .entity.animated {
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        #minimap {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            width: 100px;
+            height: 100px;
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--accent-wall);
+            border-radius: 4px;
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            grid-template-rows: repeat(10, 1fr);
+            z-index: 10;
+        }
+
+        .minimap-tile {
+            background-color: var(--bg-tertiary);
+        }
+
+        .minimap-wall { background-color: var(--accent-wall); }
+        .minimap-explored { background-color: var(--accent-floor); }
+        .minimap-player { background-color: var(--accent-player); }
+
+        #action-bar {
+            display: none;
+            justify-content: center;
+            gap: 8px;
+            padding: 8px;
+            background-color: var(--bg-secondary);
+            border-top: 1px solid var(--accent-wall);
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 20;
+            flex-wrap: wrap;
+        }
+
+        .action-button {
+            flex: 1;
+            min-width: 40px;
+            min-height: 40px;
+            padding: 8px;
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--accent-wall);
+            border-radius: 8px;
+            color: var(--text-primary);
+            text-align: center;
+            cursor: pointer;
+            user-select: none;
+            font-size: 16px;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+
+        .action-button:active {
+            background-color: var(--accent-wall);
+            transform: scale(0.95);
+        }
+
+        .movement-button {
+            font-size: 20px;
+        }
+
+        #toast-container {
+            position: fixed;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 30;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: none;
+        }
+
+        .toast {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--accent-wall);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 14px;
+            color: var(--text-primary);
+            opacity: 0;
+            transform: translateY(-20px);
+            animation: toast-in 0.3s forwards;
+            max-width: 80vw;
+            text-align: center;
+        }
+
+        @keyframes toast-in {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .toast.message-player { border-left: 4px solid var(--hp-color); }
+        .toast.message-enemy { border-left: 4px solid var(--accent-enemy); }
+        .toast.message-item { border-left: 4px solid var(--accent-item); }
+        .toast.message-system { border-left: 4px solid var(--text-secondary); }
+
+        #inventory {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: var(--bg-secondary);
+            border: 2px solid var(--accent-wall);
+            border-radius: 12px;
+            padding: 16px;
+            z-index: 40;
+            max-width: 90%;
+            max-height: 80%;
+            overflow: auto;
+        }
+
+        #inventory-title {
+            text-align: center;
+            margin-bottom: 12px;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        #inventory-items {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 8px;
+        }
+
+        .inventory-item {
+            border: 1px solid var(--accent-wall);
+            padding: 8px;
+            cursor: pointer;
+            background-color: var(--bg-tertiary);
+            border-radius: 8px;
+            transition: background-color 0.2s;
+            user-select: none;
+        }
+
+        .inventory-item:hover {
+            background-color: var(--accent-wall);
+        }
+
+        #close-inventory {
+            display: block;
+            text-align: center;
+            margin-top: 12px;
+            padding: 8px;
+            background-color: var(--bg-tertiary);
+            cursor: pointer;
+            border-radius: 8px;
+            transition: background-color 0.2s;
+        }
+
+        #close-inventory:hover {
+            background-color: var(--accent-wall);
+        }
+
+        #help {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: var(--bg-secondary);
+            border: 2px solid var(--accent-wall);
+            border-radius: 12px;
+            padding: 16px;
+            z-index: 40;
+            max-width: 90%;
+            max-height: 80%;
+            overflow: auto;
+        }
+
+        #help-content {
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        #close-help {
+            display: block;
+            text-align: center;
+            margin-top: 12px;
+            padding: 8px;
+            background-color: var(--bg-tertiary);
+            cursor: pointer;
+            border-radius: 8px;
+            transition: background-color 0.2s;
+        }
+
+        #close-help:hover {
+            background-color: var(--accent-wall);
+        }
+
+        #theme-toggle {
+            background: none;
+            border: none;
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 20px;
+            padding: 4px;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+
+        #theme-toggle:hover {
+            background-color: var(--bg-tertiary);
+        }
+
+        /* Mobile styles */
+        @media (max-width: 768px) {
+            body {
+                font-size: 12px;
+            }
+            #game {
+                grid-template-columns: repeat(10, 1fr);
+                grid-template-rows: repeat(10, 1fr);
+            }
+            .tile {
+                font-size: 16px;
+            }
+            .entity {
+                font-size: 20px;
+            }
+            #action-bar {
+                display: flex;
+            }
+            .action-button {
+                min-width: 36px;
+                min-height: 36px;
+                font-size: 14px;
+                padding: 6px;
+            }
+            .movement-button {
+                font-size: 18px;
+            }
+            #stats {
+                flex-direction: column;
+                align-items: center;
+            }
+            .stat-bar-container {
+                width: 150px;
+            }
+        }
+
+        /* Animations for particles */
+        @keyframes fireball {
+            0% { transform: translate(0, 0); opacity: 1; }
+            100% { transform: translate(var(--dx), var(--dy)); opacity: 0; }
+        }
+
+        @keyframes lightning {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.5); opacity: 0.7; }
+            100% { transform: scale(1); opacity: 0; }
+        }
+
+        .particle {
+            position: absolute;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        .fireball-particle {
+            color: #ff5500;
+            font-size: 16px;
+            animation: fireball 0.3s linear forwards;
+        }
+
+        .lightning-particle {
+            color: #ffff00;
+            font-size: 20px;
+            animation: lightning 0.3s ease-out forwards;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="header">
+            <div id="stats">
+                <div class="stat">
+                    <div class="stat-label">HP</div>
+                    <div class="stat-bar-container">
+                        <div class="stat-bar" id="hp-bar" style="width: 100%;"></div>
+                        <div class="stat-value" id="hp-value">100/100</div>
+                    </div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">MP</div>
+                    <div class="stat-bar-container">
+                        <div class="stat-bar" id="mp-bar" style="width: 100%;"></div>
+                        <div class="stat-value" id="mp-value">50/50</div>
+                    </div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Hunger</div>
+                    <div class="stat-bar-container">
+                        <div class="stat-bar" id="hunger-bar" style="width: 100%;"></div>
+                        <div class="stat-value" id="hunger-value">100</div>
+                    </div>
+                </div>
+                <div id="gold-display">💰 <span id="gold">0</span></div>
+                <div id="depth-display">🏰 <span id="depth">1</span></div>
+            </div>
+            <button id="theme-toggle" onclick="toggleTheme()">🌓</button>
+        </div>
+        
+        <div id="game"></div>
+        
+        <div id="minimap"></div>
+        
+        <div id="toast-container"></div>
+        
+        <div id="action-bar">
+            <button class="action-button movement-button" onclick="movePlayer(0, -1)">↑</button>
+            <button class="action-button" onclick="showInventory()">🎒</button>
+            <button class="action-button movement-button" onclick="movePlayer(-1, 0)">←</button>
+            <button class="action-button movement-button" onclick="movePlayer(0, 1)">↓</button>
+            <button class="action-button" onclick="showSpellMenu()">✨</button>
+            <button class="action-button movement-button" onclick="movePlayer(1, 0)">→</button>
+            <button class="action-button" onclick="showHelp()">?</button>
+            <button class="action-button" onclick="restartGame()">🔄</button>
+        </div>
+    </div>
+    
+    <div id="inventory">
+        <div id="inventory-title">Inventory</div>
+        <div id="inventory-items"></div>
+        <div id="close-inventory" onclick="hideInventory()">Close</div>
+    </div>
+    
+    <div id="help">
+        <div id="help-content">
+            <h2>Polished Dungeon Crawler</h2>
+            <h3>Controls</h3>
+            <p><strong>Desktop:</strong></p>
+            <p><strong>Movement:</strong> Arrow Keys or WASD</p>
+            <p><strong>Inventory:</strong> I</p>
+            <p><strong>Magic:</strong> M</p>
+            <p><strong>Help:</strong> ?</p>
+            <p><strong>Restart:</strong> R</p>
+            <p><strong>Cast Spell:</strong> 1-4 (after selecting spell)</p>
+            <p><strong>Close Menus:</strong> ESC</p>
+            <hr>
+            <p><strong>Mobile:</strong></p>
+            <p><strong>Movement:</strong> Tap arrows or tap grid</p>
+            <p><strong>Actions:</strong> Tap buttons (🎒, ✨, ?, 🔄)</p>
+            <p><strong>Use Item:</strong> Tap item in inventory</p>
+            <p><strong>Drop Item:</strong> Long-press item in inventory</p>
+            <hr>
+            <h3>Game Mechanics</h3>
+            <p><strong>Combat:</strong> Bump into enemies to attack.</p>
+            <p><strong>Hunger:</strong> Decreases every 10 turns. Eat food (🍄) to restore.</p>
+            <p><strong>Magic:</strong> Press ✨ to select a spell, then 1-4 to cast.</p>
+            <p><strong>Stairs (🪜):</strong> Descend to the next level.</p>
+            <p><strong>Traps (⚠️):</strong> Triggered when stepped on.</p>
+            <p><strong>Items:</strong> 💊 = Potion, 💰 = Gold, ⚔️ = Weapon, 🛡️ = Armor, 🍄 = Food</p>
+            <p><strong>Theme:</strong> Tap 🌓 to toggle dark/light mode.</p>
+        </div>
+        <div id="close-help" onclick="hideHelp()">Close</div>
+    </div>
+
+    <!-- Load libraries from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/rot-js@2.2.0/rot.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chance@1.1.8/chance.min.js"></script>
+
+    <script>
+        // =====================
+        // GAME STATE
+        // =====================
+        const game = {
+            player: {
+                x: 1,
+                y: 1,
+                hp: 100,
+                maxHp: 100,
+                mp: 50,
+                maxMp: 50,
+                gold: 0,
+                hunger: 100,
+                inventory: [],
+                equipped: {
+                    weapon: null,
+                    armor: null
+                },
+                spells: [
+                    { name: "Fireball", cost: 15, range: 5, damage: 20, description: "Deals 20 damage in a line", emoji: "🔥" },
+                    { name: "Heal", cost: 10, range: 0, damage: -30, description: "Heals 30 HP", emoji: "💖" },
+                    { name: "Teleport", cost: 20, range: 0, damage: 0, description: "Teleport to a random location", emoji: "🌪️" },
+                    { name: "Lightning", cost: 25, range: 8, damage: 30, description: "Strikes an enemy for 30 damage", emoji: "⚡" }
+                ],
+                selectedSpell: null,
+                poisoned: 0
+            },
+            map: [],
+            enemies: [],
+            items: [],
+            traps: [],
+            depth: 1,
+            log: [],
+            fov: new ROT.FOV.Precise(),
+            chance: new Chance(),
+            visible: [],
+            explored: [],
+            gameOver: false,
+            turn: 0,
+            biome: "dungeon"
+        };
+
+        // =====================
+        // GAME CONSTANTS
+        // =====================
+        const WIDTH = 20;
+        const HEIGHT = 15;
+        const BIOMES = ["dungeon", "forest", "cave", "ruins"];
+        const ENEMY_TYPES = [
+            { char: "🧌", name: "Goblin", hp: 20, damage: { min: 3, max: 8 }, xp: 10, color: "#f00", emoji: "🧌" },
+            { char: "👹", name: "Ogre", hp: 50, damage: { min: 8, max: 15 }, xp: 25, color: "#f80", emoji: "👹" },
+            { char: "🐉", name: "Dragon", hp: 100, damage: { min: 15, max: 30 }, xp: 50, color: "#f00", emoji: "🐉" },
+            { char: "💀", name: "Skeleton", hp: 30, damage: { min: 5, max: 12 }, xp: 15, color: "#fff", emoji: "💀" },
+            { char: "🧌", name: "Troll", hp: 60, damage: { min: 10, max: 20 }, xp: 30, color: "#0a0", emoji: "🧌" }
+        ];
+        const ITEM_TYPES = [
+            { char: "💊", type: "potion", name: "Health Potion", effect: "heal", value: 30, color: "#f0f", emoji: "💊", weight: 0.6 },
+            { char: "💰", type: "gold", name: "Gold", effect: "gold", value: 50, color: "#ff0", emoji: "💰", weight: 0.3 },
+            { char: "⚔️", type: "weapon", name: "Sword", effect: "equip", damage: 5, color: "#0ff", emoji: "⚔️", weight: 0.2 },
+            { char: "🛡️", type: "armor", name: "Leather Armor", effect: "equip", defense: 3, color: "#ff0", emoji: "🛡️", weight: 0.2 },
+            { char: "🍄", type: "food", name: "Ration", effect: "eat", value: 40, color: "#ffa500", emoji: "🍄", weight: 0.3 },
+            { char: "💜", type: "potion", name: "Mana Potion", effect: "mana", value: 20, color: "#00f", emoji: "💜", weight: 0.4 }
+        ];
+        const TRAP_TYPES = [
+            { char: "⚠️", name: "Pit Trap", damage: 15, effect: "damage", emoji: "⚠️" },
+            { char: "☠️", name: "Poison Trap", damage: 0, effect: "poison", turns: 5, emoji: "☠️" },
+            { char: "💥", name: "Spike Trap", damage: 10, effect: "damage", emoji: "💥" },
+            { char: "🌀", name: "Teleport Trap", damage: 0, effect: "teleport", emoji: "🌀" }
+        ];
+
+        // =====================
+        // SVG/EMOJI TILE DEFINITIONS
+        // =====================
+        const TILE_DEFS = {
+            " ": { type: "floor", char: "", svg: '<rect width="100%" height="100%" fill="var(--accent-floor)" />', emoji: "" },
+            ".": { type: "floor", char: "", svg: '<rect width="100%" height="100%" fill="var(--accent-floor)" />', emoji: "" },
+            "█": { type: "wall", char: "", svg: '<rect width="100%" height="100%" fill="var(--accent-wall)" />', emoji: "" },
+            "#": { type: "wall", char: "", svg: '<rect width="100%" height="100%" fill="#555" />', emoji: "" },
+            "♣": { type: "floor", char: "", svg: '<rect width="100%" height="100%" fill="#228B22" />', emoji: "" },
+            "░": { type: "floor", char: "", svg: '<rect width="100%" height="100%" fill="#555" />', emoji: "" },
+            ">": { type: "stairs", char: "🪜", svg: '<rect width="100%" height="100%" fill="var(--accent-stairs)" />', emoji: "🪜" },
+            "@": { type: "player", char: "🧙", svg: '<circle cx="50%" cy="50%" r="40%" fill="var(--accent-player)" />', emoji: "🧙" },
+            "g": { type: "enemy", char: "🧌", svg: '<circle cx="50%" cy="50%" r="40%" fill="var(--accent-enemy)" />', emoji: "🧌" },
+            "O": { type: "enemy", char: "👹", svg: '<circle cx="50%" cy="50%" r="40%" fill="#f80" />', emoji: "👹" },
+            "D": { type: "enemy", char: "🐉", svg: '<circle cx="50%" cy="50%" r="40%" fill="#f00" />', emoji: "🐉" },
+            "s": { type: "enemy", char: "💀", svg: '<circle cx="50%" cy="50%" r="40%" fill="#fff" />', emoji: "💀" },
+            "t": { type: "enemy", char: "🧌", svg: '<circle cx="50%" cy="50%" r="40%" fill="#0a0" />', emoji: "🧌" },
+            "b": { type: "enemy", char: "🦇", svg: '<circle cx="50%" cy="50%" r="40%" fill="#888" />', emoji: "🦇" },
+            "!": { type: "item", char: "💊", svg: '<rect width="100%" height="100%" fill="#f0f" />', emoji: "💊" },
+            "$": { type: "item", char: "💰", svg: '<circle cx="50%" cy="50%" r="40%" fill="#ff0" />', emoji: "💰" },
+            "|": { type: "item", char: "⚔️", svg: '<rect width="100%" height="100%" fill="#0ff" />', emoji: "⚔️" },
+            "=": { type: "item", char: "🛡️", svg: '<rect width="100%" height="100%" fill="#ff0" />', emoji: "🛡️" },
+            "%": { type: "item", char: "🍄", svg: '<circle cx="50%" cy="50%" r="40%" fill="#ffa500" />', emoji: "🍄" },
+            "*": { type: "item", char: "💜", svg: '<rect width="100%" height="100%" fill="#00f" />', emoji: "💜" },
+            "^": { type: "trap", char: "⚠️", svg: '<rect width="100%" height="100%" fill="#f0f" />', emoji: "⚠️" },
+            "+": { type: "corpse", char: "☠️", svg: '<circle cx="50%" cy="50%" r="40%" fill="#888" />', emoji: "☠️" }
+        };
+
+        // =====================
+        // INITIALIZATION
+        // =====================
+        function init() {
+            game.player.x = 1;
+            game.player.y = 1;
+            game.player.hp = game.player.maxHp;
+            game.player.mp = game.player.maxMp;
+            game.player.hunger = 100;
+            game.player.poisoned = 0;
+            game.depth = 1;
+            game.log = [];
+            game.gameOver = false;
+            game.turn = 0;
+            game.biome = game.chance.pickone(BIOMES);
+            generateDungeon();
+            render();
+            renderMinimap();
+            addToast("Welcome to the dungeon! Find the stairs (🪜) to descend.", "system");
+        }
+
+        // =====================
+        // DUNGEON GENERATION
+        // =====================
+        function generateDungeon() {
+            game.map = [];
+            game.enemies = [];
+            game.items = [];
+            game.traps = [];
+            game.visible = [];
+            game.explored = [];
+            
+            // Initialize empty map
+            for (let y = 0; y < HEIGHT; y++) {
+                game.map[y] = [];
+                game.visible[y] = [];
+                game.explored[y] = [];
+                for (let x = 0; x < WIDTH; x++) {
+                    game.map[y][x] = " ";
+                    game.visible[y][x] = false;
+                    game.explored[y][x] = false;
+                }
+            }
+
+            // Generate dungeon layout with ROT.js
+            const digger = new ROT.Map.Digger(WIDTH, HEIGHT, {
+                roomWidth: [3, 6],
+                roomHeight: [3, 4],
+                corridorLength: [3, 6],
+                dugPercentage: 0.5
+            });
+            digger.create((x, y, value) => {
+                if (value === 1) {
+                    game.map[y][x] = "█";
+                } else {
+                    game.map[y][x] = ".";
+                }
+            });
+
+            // Apply biome-specific terrain
+            applyBiome();
+
+            // Place stairs
+            placeStairs();
+
+            // Place player
+            placePlayer();
+
+            // Place enemies
+            const enemyCount = Math.min(3 + game.depth * 1, 10);
+            placeEnemies(enemyCount);
+
+            // Place items
+            const itemCount = Math.min(5 + game.depth, 10);
+            placeItems(itemCount);
+
+            // Place traps
+            const trapCount = Math.min(2 + Math.floor(game.depth / 2), 5);
+            placeTraps(trapCount);
+
+            // Calculate initial FOV
+            updateFOV();
+        }
+
+        function applyBiome() {
+            if (game.biome === "forest") {
+                for (let y = 0; y < HEIGHT; y++) {
+                    for (let x = 0; x < WIDTH; x++) {
+                        if (game.map[y][x] === "." && game.chance.bool({ likelihood: 20 })) {
+                            game.map[y][x] = "♣";
+                        }
+                    }
+                }
+            } else if (game.biome === "cave") {
+                for (let y = 0; y < HEIGHT; y++) {
+                    for (let x = 0; x < WIDTH; x++) {
+                        if (game.map[y][x] === "." && game.chance.bool({ likelihood: 15 })) {
+                            game.map[y][x] = "░";
+                        }
+                    }
+                }
+            } else if (game.biome === "ruins") {
+                for (let y = 0; y < HEIGHT; y++) {
+                    for (let x = 0; x < WIDTH; x++) {
+                        if (game.map[y][x] === "█" && game.chance.bool({ likelihood: 30 })) {
+                            game.map[y][x] = "#";
+                        }
+                    }
+                }
+            }
+        }
+
+        function placeStairs() {
+            let x, y;
+            do {
+                x = game.chance.integer({ min: 1, max: WIDTH - 2 });
+                y = game.chance.integer({ min: 1, max: HEIGHT - 2 });
+            } while (game.map[y][x] !== "." && game.map[y][x] !== "♣" && game.map[y][x] !== "░");
+            game.map[y][x] = ">";
+        }
+
+        function placePlayer() {
+            let x, y;
+            do {
+                x = game.chance.integer({ min: 1, max: WIDTH - 2 });
+                y = game.chance.integer({ min: 1, max: HEIGHT - 2 });
+            } while (game.map[y][x] !== "." && game.map[y][x] !== "♣" && game.map[y][x] !== "░");
+            game.player.x = x;
+            game.player.y = y;
+            game.map[y][x] = "@";
+        }
+
+        function placeEnemies(count) {
+            for (let i = 0; i < count; i++) {
+                let x, y;
+                do {
+                    x = game.chance.integer({ min: 1, max: WIDTH - 2 });
+                    y = game.chance.integer({ min: 1, max: HEIGHT - 2 });
+                } while (game.map[y][x] !== "." && game.map[y][x] !== "♣" && game.map[y][x] !== "░");
+
+                const enemyType = game.chance.weighted(
+                    ENEMY_TYPES,
+                    ENEMY_TYPES.map(e => 100 - e.xp * game.depth / 2)
+                );
+                game.enemies.push({
+                    x,
+                    y,
+                    char: enemyType.char,
+                    name: enemyType.name,
+                    hp: enemyType.hp + game.depth * 3,
+                    maxHp: enemyType.hp + game.depth * 3,
+                    damage: {
+                        min: enemyType.damage.min + Math.floor(game.depth / 2),
+                        max: enemyType.damage.max + game.depth
+                    },
+                    xp: enemyType.xp * game.depth,
+                    color: enemyType.color,
+                    emoji: enemyType.emoji
+                });
+                game.map[y][x] = enemyType.char;
+            }
+        }
+
+        function placeItems(count) {
+            for (let i = 0; i < count; i++) {
+                let x, y;
+                do {
+                    x = game.chance.integer({ min: 1, max: WIDTH - 2 });
+                    y = game.chance.integer({ min: 1, max: HEIGHT - 2 });
+                } while (game.map[y][x] !== "." && game.map[y][x] !== "♣" && game.map[y][x] !== "░");
+
+                const itemType = game.chance.weighted(
+                    ITEM_TYPES,
+                    ITEM_TYPES.map(i => i.weight * 100)
+                );
+                const item = {
+                    x,
+                    y,
+                    char: itemType.char,
+                    type: itemType.type,
+                    name: itemType.name,
+                    effect: itemType.effect,
+                    color: itemType.color,
+                    emoji: itemType.emoji
+                };
+                if (itemType.effect === "heal") item.value = itemType.value;
+                if (itemType.effect === "gold") item.value = itemType.value * game.depth;
+                if (itemType.effect === "equip") {
+                    item.damage = itemType.damage || 0;
+                    item.defense = itemType.defense || 0;
+                }
+                if (itemType.effect === "eat") item.value = itemType.value;
+                if (itemType.effect === "mana") item.value = itemType.value;
+                game.items.push(item);
+                game.map[y][x] = itemType.char;
+            }
+        }
+
+        function placeTraps(count) {
+            for (let i = 0; i < count; i++) {
+                let x, y;
+                do {
+                    x = game.chance.integer({ min: 1, max: WIDTH - 2 });
+                    y = game.chance.integer({ min: 1, max: HEIGHT - 2 });
+                } while (game.map[y][x] !== "." && game.map[y][x] !== "♣" && game.map[y][x] !== "░");
+
+                const trapType = game.chance.pickone(TRAP_TYPES);
+                game.traps.push({
+                    x,
+                    y,
+                    char: trapType.char,
+                    name: trapType.name,
+                    effect: trapType.effect,
+                    damage: trapType.damage,
+                    turns: trapType.turns || 0,
+                    emoji: trapType.emoji
+                });
+                game.map[y][x] = trapType.char;
+            }
+        }
+
+        // =====================
+        // FIELD OF VIEW (FOV)
+        // =====================
+        function updateFOV() {
+            game.fov.compute(
+                game.player.x,
+                game.player.y,
+                8, // Light radius
+                (x, y, r, visibility) => {
+                    if (x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT) {
+                        game.visible[y][x] = visibility > 0;
+                        if (visibility > 0) {
+                            game.explored[y][x] = true;
+                        }
+                    }
+                }
+            );
+        }
+
+        // =====================
+        // RENDERING
+        // =====================
+        function render() {
+            const gameElement = document.getElementById("game");
+            gameElement.innerHTML = "";
+
+            for (let y = 0; y < HEIGHT; y++) {
+                for (let x = 0; x < WIDTH; x++) {
+                    const tile = document.createElement("div");
+                    tile.className = "tile";
+
+                    // Determine tile type and class
+                    const cell = game.map[y][x];
+                    const tileDef = TILE_DEFS[cell] || TILE_DEFS[""];
+
+                    // Set background based on tile type
+                    if (cell === "█" || cell === "#") {
+                        tile.classList.add("tile-wall");
+                    } else if (cell === "♣") {
+                        tile.classList.add("tile-forest");
+                    } else if (cell === "░") {
+                        tile.classList.add("tile-cave");
+                    } else if (cell === "#") {
+                        tile.classList.add("tile-ruins");
+                    } else {
+                        tile.classList.add("tile-floor");
+                    }
+
+                    // Add entity if present
+                    if (x === game.player.x && y === game.player.y) {
+                        const entity = document.createElement("div");
+                        entity.className = "entity entity-player";
+                        entity.textContent = tileDef.emoji || tileDef.char;
+                        tile.appendChild(entity);
+                    } else if (game.enemies.some(e => e.x === x && e.y === y)) {
+                        const enemy = game.enemies.find(e => e.x === x && e.y === y);
+                        const entity = document.createElement("div");
+                        entity.className = "entity entity-enemy";
+                        entity.textContent = enemy.emoji || enemy.char;
+                        tile.appendChild(entity);
+                    } else if (game.items.some(i => i.x === x && i.y === y)) {
+                        const item = game.items.find(i => i.x === x && i.y === y);
+                        const entity = document.createElement("div");
+                        entity.className = "entity entity-item";
+                        entity.textContent = item.emoji || item.char;
+                        tile.appendChild(entity);
+                    } else if (game.traps.some(t => t.x === x && t.y === y)) {
+                        const trap = game.traps.find(t => t.x === x && t.y === y);
+                        if (game.visible[y][x]) {
+                            const entity = document.createElement("div");
+                            entity.className = "entity entity-trap";
+                            entity.textContent = trap.emoji || trap.char;
+                            tile.appendChild(entity);
+                        }
+                    } else if (cell === "+") {
+                        const entity = document.createElement("div");
+                        entity.className = "entity entity-corpse";
+                        entity.textContent = TILE_DEFS[cell].emoji || TILE_DEFS[cell].char;
+                        tile.appendChild(entity);
+                    } else if (cell === ">") {
+                        const entity = document.createElement("div");
+                        entity.className = "entity entity-stairs";
+                        entity.textContent = TILE_DEFS[cell].emoji || TILE_DEFS[cell].char;
+                        tile.appendChild(entity);
+                    }
+
+                    // Apply visibility
+                    if (!game.visible[y][x] && !game.explored[y][x]) {
+                        tile.style.backgroundColor = "var(--bg-tertiary)";
+                        tile.innerHTML = "";
+                    } else if (!game.visible[y][x] && game.explored[y][x]) {
+                        // Darken explored but not visible cells
+                        tile.style.opacity = "0.5";
+                    }
+
+                    // Add click handler for movement
+                    tile.onclick = () => {
+                        if (game.gameOver) return;
+                        const dx = x - game.player.x;
+                        const dy = y - game.player.y;
+                        if (Math.abs(dx) + Math.abs(dy) === 1) {
+                            movePlayer(dx, dy);
+                        }
+                    };
+
+                    gameElement.appendChild(tile);
+                }
+            }
+
+            // Update stats
+            updateStats();
+        }
+
+        function updateStats() {
+            const hpPercent = (game.player.hp / game.player.maxHp) * 100;
+            const mpPercent = (game.player.mp / game.player.maxMp) * 100;
+            const hungerPercent = game.player.hunger;
+
+            document.getElementById("hp-bar").style.width = `${hpPercent}%`;
+            document.getElementById("mp-bar").style.width = `${mpPercent}%`;
+            document.getElementById("hunger-bar").style.width = `${hungerPercent}%`;
+
+            document.getElementById("hp-value").textContent = `${game.player.hp}/${game.player.maxHp}`;
+            document.getElementById("mp-value").textContent = `${game.player.mp}/${game.player.maxMp}`;
+            document.getElementById("hunger-value").textContent = game.player.hunger;
+            document.getElementById("gold").textContent = game.player.gold;
+            document.getElementById("depth").textContent = game.depth;
+        }
+
+        // =====================
+        // MINIMAP
+        // =====================
+        function renderMinimap() {
+            const minimapElement = document.getElementById("minimap");
+            minimapElement.innerHTML = "";
+
+            const minimapSize = 10;
+            const scaleX = Math.floor(WIDTH / minimapSize);
+            const scaleY = Math.floor(HEIGHT / minimapSize);
+
+            for (let y = 0; y < minimapSize; y++) {
+                for (let x = 0; x < minimapSize; x++) {
+                    const tile = document.createElement("div");
+                    tile.className = "minimap-tile";
+
+                    // Sample the game map at this scaled position
+                    const sampleX = Math.floor(x * scaleX);
+                    const sampleY = Math.floor(y * scaleY);
+
+                    if (sampleX >= 0 && sampleX < WIDTH && sampleY >= 0 && sampleY < HEIGHT) {
+                        if (game.explored[sampleY][sampleX]) {
+                            tile.classList.add("minimap-explored");
+                            if (game.map[sampleY][sampleX] === "█" || game.map[sampleY][sampleX] === "#") {
+                                tile.classList.add("minimap-wall");
+                            }
+                            if (sampleX === game.player.x && sampleY === game.player.y) {
+                                tile.classList.add("minimap-player");
+                            }
+                        }
+                    }
+
+                    minimapElement.appendChild(tile);
+                }
+            }
+        }
+
+        // =====================
+        // TOAST NOTIFICATIONS
+        // =====================
+        function addToast(message, type = "system") {
+            const toastContainer = document.getElementById("toast-container");
+            const toast = document.createElement("div");
+            toast.className = `toast message-${type}`;
+            toast.textContent = message;
+            toastContainer.appendChild(toast);
+
+            // Remove toast after 3 seconds
+            setTimeout(() => {
+                toast.style.opacity = "0";
+                toast.style.transform = "translateY(-20px)";
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // =====================
+        // THEME TOGGLE
+        // =====================
+        function toggleTheme() {
+            document.body.classList.toggle("light-theme");
+            const themeButton = document.getElementById("theme-toggle");
+            themeButton.textContent = document.body.classList.contains("light-theme") ? "🌙" : "🌓";
+        }
+
+        // =====================
+        // PARTICLE EFFECTS
+        // =====================
+        function createParticle(x, y, type, targetX = null, targetY = null) {
+            const particle = document.createElement("div");
+            particle.className = `particle ${type}-particle`;
+            particle.textContent = type === "fireball" ? "🔥" : type === "lightning" ? "⚡" : "✨";
+            particle.style.left = `${x * 100 / WIDTH}%`;
+            particle.style.top = `${y * 100 / HEIGHT}%`;
+            particle.style.transform = "translate(-50%, -50%)";
+
+            if (targetX !== null && targetY !== null) {
+                const dx = (targetX - x) * (100 / WIDTH);
+                const dy = (targetY - y) * (100 / HEIGHT);
+                particle.style.setProperty("--dx", `${dx}%`);
+                particle.style.setProperty("--dy", `${dy}%`);
+            }
+
+            document.getElementById("game").appendChild(particle);
+
+            // Remove particle after animation
+            setTimeout(() => particle.remove(), 500);
+        }
+
+        // =====================
+        // PLAYER ACTIONS
+        // =====================
+        function movePlayer(dx, dy) {
+            if (game.gameOver) return;
+
+            const newX = game.player.x + dx;
+            const newY = game.player.y + dy;
+
+            // Check bounds
+            if (newX < 0 || newX >= WIDTH || newY < 0 || newY >= HEIGHT) {
+                addToast("You can't move that way!", "system");
+                return;
+            }
+
+            // Check for walls
+            if (game.map[newY][newX] === "█" || game.map[newY][newX] === "#") {
+                addToast("You bump into a wall!", "system");
+                return;
+            }
+
+            // Check for enemies
+            const enemyIndex = game.enemies.findIndex(e => e.x === newX && e.y === newY);
+            if (enemyIndex !== -1) {
+                combat(enemyIndex);
+                return;
+            }
+
+            // Check for items
+            const itemIndex = game.items.findIndex(i => i.x === newX && i.y === newY);
+            if (itemIndex !== -1) {
+                pickUpItem(itemIndex);
+            }
+
+            // Check for traps
+            const trapIndex = game.traps.findIndex(t => t.x === newX && t.y === newY);
+            if (trapIndex !== -1) {
+                triggerTrap(trapIndex);
+            }
+
+            // Check for stairs
+            if (game.map[newY][newX] === ">") {
+                nextLevel();
+                return;
+            }
+
+            // Move player
+            game.map[game.player.y][game.player.x] = ".";
+            game.player.x = newX;
+            game.player.y = newY;
+            game.map[newY][newX] = "@";
+
+            // Decrease hunger every 10 turns
+            game.turn++;
+            if (game.turn % 10 === 0) {
+                game.player.hunger--;
+                if (game.player.hunger <= 0) {
+                    game.player.hp -= 1;
+                    addToast("You starve! HP -1", "player");
+                }
+            }
+
+            // Apply poison
+            if (game.player.poisoned > 0) {
+                game.player.hp -= 2;
+                game.player.poisoned--;
+                addToast("Poison damages you! HP -2", "enemy");
+                if (game.player.hp <= 0) {
+                    gameOver();
+                    return;
+                }
+            }
+
+            // Enemy turns
+            enemiesTurn();
+
+            // Update FOV and render
+            updateFOV();
+            render();
+            renderMinimap();
+        }
+
+        function combat(enemyIndex) {
+            const enemy = game.enemies[enemyIndex];
+            
+            // Player attacks
+            const playerDamage = game.chance.integer({
+                min: 5 + (game.player.equipped.weapon ? game.player.equipped.weapon.damage : 0),
+                max: 10 + (game.player.equipped.weapon ? game.player.equipped.weapon.damage : 0)
+            });
+            enemy.hp -= playerDamage;
+            addToast(`You hit the ${enemy.name} for ${playerDamage} damage!`, "player");
+
+            // Check if enemy is dead
+            if (enemy.hp <= 0) {
+                game.enemies.splice(enemyIndex, 1);
+                game.map[enemy.y][enemy.x] = "+"; // Corpse
+                game.player.gold += enemy.xp / 2;
+                addToast(`You killed the ${enemy.name}! +${enemy.xp / 2} gold.`, "player");
+                playSound("kill");
+                return;
+            }
+
+            // Enemy attacks
+            const enemyDamage = game.chance.integer({
+                min: enemy.damage.min,
+                max: enemy.damage.max
+            }) - (game.player.equipped.armor ? game.player.equipped.armor.defense : 0);
+            const actualDamage = Math.max(1, enemyDamage);
+            game.player.hp -= actualDamage;
+            addToast(`The ${enemy.name} hits you for ${actualDamage} damage!`, "enemy");
+            playSound("hit");
+
+            // Check if player is dead
+            if (game.player.hp <= 0) {
+                gameOver();
+            }
+        }
+
+        function enemiesTurn() {
+            game.enemies.forEach(enemy => {
+                if (enemy.hp <= 0) return;
+
+                // Simple AI: Move toward player if in FOV
+                if (game.visible[enemy.y][enemy.x]) {
+                    const path = findPath(enemy.x, enemy.y, game.player.x, game.player.y);
+                    if (path.length > 1) {
+                        const nextX = path[1].x;
+                        const nextY = path[1].y;
+
+                        // Check if next cell is player
+                        if (nextX === game.player.x && nextY === game.player.y) {
+                            // Already handled in combat()
+                        }
+                        // Check if next cell is empty
+                        else if (game.map[nextY][nextX] === "." || game.map[nextY][nextX] === "," || game.map[nextY][nextX] === "♠" || game.map[nextY][nextX] === "▒") {
+                            game.map[enemy.y][enemy.x] = ".";
+                            enemy.x = nextX;
+                            enemy.y = nextY;
+                            game.map[nextY][nextX] = enemy.char;
+                        }
+                    }
+                }
+            });
+        }
+
+        function findPath(startX, startY, endX, endY) {
+            const astar = new ROT.Path.AStar(endX, endY, (x, y) => {
+                if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) return false;
+                return game.map[y][x] !== "█" && game.map[y][x] !== "#" && game.map[y][x] !== ">";
+            }, { topology: 4 });
+            return astar.compute(startX, startY);
+        }
+
+        function pickUpItem(itemIndex) {
+            const item = game.items[itemIndex];
+            game.player.inventory.push(item);
+            game.items.splice(itemIndex, 1);
+            game.map[item.y][item.x] = ".";
+            addToast(`You picked up a ${item.name}!`, "item");
+            playSound("pickup");
+        }
+
+        function triggerTrap(trapIndex) {
+            const trap = game.traps[trapIndex];
+            game.traps.splice(trapIndex, 1);
+            game.map[trap.y][trap.x] = "^"; // Reveal trap
+
+            if (trap.effect === "damage") {
+                game.player.hp -= trap.damage;
+                addToast(`You triggered a ${trap.name}! HP -${trap.damage}`, "system");
+                playSound("hit");
+            } else if (trap.effect === "poison") {
+                game.player.poisoned = trap.turns;
+                addToast(`You triggered a ${trap.name}! Poisoned for ${trap.turns} turns.`, "system");
+            } else if (trap.effect === "teleport") {
+                const { x, y } = getRandomEmptyCell();
+                game.map[game.player.y][game.player.x] = ".";
+                game.player.x = x;
+                game.player.y = y;
+                game.map[y][x] = "@";
+                addToast(`You triggered a ${trap.name} and were teleported!`, "system");
+            }
+
+            if (game.player.hp <= 0) {
+                gameOver();
+            }
+        }
+
+        function nextLevel() {
+            game.depth++;
+            game.biome = game.chance.pickone(BIOMES);
+            game.player.hp = Math.min(game.player.hp + 20, game.player.maxHp);
+            game.player.mp = Math.min(game.player.mp + 10, game.player.maxMp);
+            game.player.hunger = Math.min(game.player.hunger + 30, 100);
+            addToast(`You descend to depth ${game.depth}...`, "system");
+            generateDungeon();
+            updateFOV();
+            render();
+            renderMinimap();
+        }
+
+        function gameOver() {
+            game.gameOver = true;
+            addToast("You died! Game over. Press 🔄 to restart.", "system");
+            playSound("death");
+        }
+
+        // =====================
+        // INVENTORY SYSTEM
+        // =====================
+        function showInventory() {
+            const inventoryElement = document.getElementById("inventory");
+            const itemsElement = document.getElementById("inventory-items");
+            
+            if (game.player.inventory.length === 0) {
+                itemsElement.innerHTML = "<div>Inventory is empty.</div>";
+            } else {
+                itemsElement.innerHTML = game.player.inventory.map((item, index) => `
+                    <div class="inventory-item" onclick="useItem(${index})" oncontextmenu="dropItem(${index}); return false;">
+                        <span style="font-size: 20px;">${item.emoji || item.char}</span>
+                        <span>${item.name}</span>
+                        ${item.type === "weapon" ? `<div>DMG: +${item.damage}</div>` : ""}
+                        ${item.type === "armor" ? `<div>DEF: +${item.defense}</div>` : ""}
+                        ${item.type === "potion" && item.effect === "heal" ? `<div>Heals ${item.value} HP</div>` : ""}
+                        ${item.type === "potion" && item.effect === "mana" ? `<div>Restores ${item.value} MP</div>` : ""}
+                        ${item.type === "food" ? `<div>Restores ${item.value} hunger</div>` : ""}
+                        ${item.type === "gold" ? `<div>Value: ${item.value} gold</div>` : ""}
+                        <div style="font-size: 10px; color: var(--text-secondary);">Tap to use, long-press to drop</div>
+                    </div>
+                `).join("");
+            }
+            inventoryElement.style.display = "block";
+        }
+
+        function hideInventory() {
+            document.getElementById("inventory").style.display = "none";
+        }
+
+        function useItem(index) {
+            const item = game.player.inventory[index];
+            
+            if (item.type === "potion" && item.effect === "heal") {
+                game.player.hp = Math.min(game.player.hp + item.value, game.player.maxHp);
+                addToast(`You drink the ${item.name}. HP +${item.value}`, "item");
+                game.player.inventory.splice(index, 1);
+            } else if (item.type === "potion" && item.effect === "mana") {
+                game.player.mp = Math.min(game.player.mp + item.value, game.player.maxMp);
+                addToast(`You drink the ${item.name}. MP +${item.value}`, "item");
+                game.player.inventory.splice(index, 1);
+            } else if (item.type === "food") {
+                game.player.hunger = Math.min(game.player.hunger + item.value, 100);
+                addToast(`You eat the ${item.name}. Hunger +${item.value}`, "item");
+                game.player.inventory.splice(index, 1);
+            } else if (item.type === "weapon") {
+                if (game.player.equipped.weapon) {
+                    game.player.inventory.push(game.player.equipped.weapon);
+                }
+                game.player.equipped.weapon = item;
+                game.player.inventory.splice(index, 1);
+                addToast(`You equip the ${item.name}.`, "item");
+            } else if (item.type === "armor") {
+                if (game.player.equipped.armor) {
+                    game.player.inventory.push(game.player.equipped.armor);
+                }
+                game.player.equipped.armor = item;
+                game.player.inventory.splice(index, 1);
+                addToast(`You equip the ${item.name}.`, "item");
+            } else if (item.type === "gold") {
+                addToast("You can't use gold directly.", "system");
+            }
+            
+            hideInventory();
+            render();
+            playSound("use");
+        }
+
+        function dropItem(index) {
+            const item = game.player.inventory[index];
+            game.player.inventory.splice(index, 1);
+            
+            let x, y;
+            do {
+                x = game.player.x + game.chance.integer({ min: -1, max: 1 });
+                y = game.player.y + game.chance.integer({ min: -1, max: 1 });
+            } while (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT || game.map[y][x] !== ".");
+
+            item.x = x;
+            item.y = y;
+            game.items.push(item);
+            game.map[y][x] = item.char;
+            addToast(`You drop the ${item.name}.`, "item");
+            hideInventory();
+            render();
+        }
+
+        // =====================
+        // MAGIC SYSTEM
+        // =====================
+        function showSpellMenu() {
+            const inventoryElement = document.getElementById("inventory");
+            const itemsElement = document.getElementById("inventory-items");
+            
+            itemsElement.innerHTML = game.player.spells.map((spell, index) => `
+                <div class="inventory-item" onclick="selectSpell(${index})">
+                    <span style="font-size: 20px;">${spell.emoji}</span>
+                    <span>${spell.name} (Cost: ${spell.cost} MP)</span>
+                    <div style="font-size: 12px; color: var(--text-secondary);">${spell.description}</div>
+                </div>
+            `).join("");
+            
+            inventoryElement.style.display = "block";
+        }
+
+        function selectSpell(index) {
+            game.player.selectedSpell = game.player.spells[index];
+            hideInventory();
+            addToast(`Selected ${game.player.selectedSpell.name}. Press 1-4 to cast.`, "system");
+        }
+
+        function castSpell(direction) {
+            if (!game.player.selectedSpell) {
+                addToast("No spell selected!", "system");
+                return;
+            }
+
+            const spell = game.player.selectedSpell;
+            if (game.player.mp < spell.cost) {
+                addToast("Not enough MP!", "system");
+                return;
+            }
+
+            game.player.mp -= spell.cost;
+            game.player.selectedSpell = null;
+
+            if (spell.name === "Fireball") {
+                castFireball(direction);
+            } else if (spell.name === "Heal") {
+                game.player.hp = Math.min(game.player.hp + spell.damage, game.player.maxHp);
+                addToast(`You cast ${spell.name}. HP +${-spell.damage}`, "player");
+            } else if (spell.name === "Teleport") {
+                const { x, y } = getRandomEmptyCell();
+                game.map[game.player.y][game.player.x] = ".";
+                game.player.x = x;
+                game.player.y = y;
+                game.map[y][x] = "@";
+                addToast(`You cast ${spell.name} and teleport!`, "player");
+            } else if (spell.name === "Lightning") {
+                castLightning(direction);
+            }
+
+            playSound("spell");
+            updateFOV();
+            render();
+        }
+
+        function castFireball(direction) {
+            const spell = game.player.spells.find(s => s.name === "Fireball");
+            const dx = { 1: 1, 2: 0, 3: -1, 4: 0 }[direction];
+            const dy = { 1: 0, 2: 1, 3: 0, 4: -1 }[direction];
+            
+            let x = game.player.x;
+            let y = game.player.y;
+            let distance = 0;
+            
+            while (distance < spell.range) {
+                x += dx;
+                y += dy;
+                distance++;
+
+                if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) break;
+                if (game.map[y][x] === "█" || game.map[y][x] === "#") break;
+
+                // Create particle effect
+                createParticle(x, y, "fireball", x + dx, y + dy);
+
+                // Hit enemy
+                const enemyIndex = game.enemies.findIndex(e => e.x === x && e.y === y);
+                if (enemyIndex !== -1) {
+                    game.enemies[enemyIndex].hp -= spell.damage;
+                    addToast(`Fireball hits the ${game.enemies[enemyIndex].name} for ${spell.damage} damage!`, "player");
+                    if (game.enemies[enemyIndex].hp <= 0) {
+                        game.enemies.splice(enemyIndex, 1);
+                        game.map[y][x] = "+";
+                        addToast(`You killed the ${game.enemies[enemyIndex].name}!`, "player");
+                    }
+                    break;
+                }
+            }
+        }
+
+        function castLightning(direction) {
+            const spell = game.player.spells.find(s => s.name === "Lightning");
+            const dx = { 1: 1, 2: 0, 3: -1, 4: 0 }[direction];
+            const dy = { 1: 0, 2: 1, 3: 0, 4: -1 }[direction];
+            
+            let x = game.player.x;
+            let y = game.player.y;
+            let distance = 0;
+            
+            while (distance < spell.range) {
+                x += dx;
+                y += dy;
+                distance++;
+
+                if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) break;
+                if (game.map[y][x] === "█" || game.map[y][x] === "#") break;
+
+                // Create particle effect
+                createParticle(x, y, "lightning");
+
+                // Hit first enemy in path
+                const enemyIndex = game.enemies.findIndex(e => e.x === x && e.y === y);
+                if (enemyIndex !== -1) {
+                    game.enemies[enemyIndex].hp -= spell.damage;
+                    addToast(`Lightning strikes the ${game.enemies[enemyIndex].name} for ${spell.damage} damage!`, "player");
+                    if (game.enemies[enemyIndex].hp <= 0) {
+                        game.enemies.splice(enemyIndex, 1);
+                        game.map[y][x] = "+";
+                        addToast(`You killed the ${game.enemies[enemyIndex].name}!`, "player");
+                    }
+                    break;
+                }
+            }
+        }
+
+        // =====================
+        // HELP MENU
+        // =====================
+        function showHelp() {
+            document.getElementById("help").style.display = "block";
+        }
+
+        function hideHelp() {
+            document.getElementById("help").style.display = "none";
+        }
+
+        // =====================
+        // SOUND EFFECTS
+        // =====================
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playSound(type) {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            if (type === "hit") {
+                oscillator.frequency.value = 200;
+                gainNode.gain.value = 0.1;
+                oscillator.type = "sine";
+            } else if (type === "kill") {
+                oscillator.frequency.value = 400;
+                gainNode.gain.value = 0.2;
+                oscillator.type = "sine";
+            } else if (type === "death") {
+                oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.5);
+                gainNode.gain.value = 0.3;
+                oscillator.type = "sawtooth";
+            } else if (type === "pickup") {
+                oscillator.frequency.value = 600;
+                gainNode.gain.value = 0.1;
+                oscillator.type = "sine";
+            } else if (type === "use") {
+                oscillator.frequency.value = 800;
+                gainNode.gain.value = 0.1;
+                oscillator.type = "sine";
+            } else if (type === "spell") {
+                oscillator.frequency.value = 1000;
+                gainNode.gain.value = 0.15;
+                oscillator.type = "sine";
+            }
+
+            oscillator.start();
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.2);
+            oscillator.stop(audioContext.currentTime + 0.2);
+        }
+
+        // =====================
+        // UTILITY FUNCTIONS
+        // =====================
+        function getRandomEmptyCell() {
+            let x, y;
+            do {
+                x = game.chance.integer({ min: 1, max: WIDTH - 2 });
+                y = game.chance.integer({ min: 1, max: HEIGHT - 2 });
+            } while (game.map[y][x] !== "." && game.map[y][x] !== "♣" && game.map[y][x] !== "░" && game.map[y][x] !== "♠" && game.map[y][x] !== "▒");
+            return { x, y };
+        }
+
+        function restartGame() {
+            init();
+            hideInventory();
+            hideHelp();
+        }
+
+        // =====================
+        // INPUT HANDLING
+        // =====================
+        document.addEventListener("keydown", (e) => {
+            if (game.gameOver) {
+                if (e.key.toLowerCase() === "r") {
+                    restartGame();
+                }
+                return;
+            }
+
+            // Close menus with ESC
+            if (e.key === "Escape") {
+                hideInventory();
+                hideHelp();
+                game.player.selectedSpell = null;
+                return;
+            }
+
+            // Movement
+            const moveKeys = {
+                ArrowUp: { dx: 0, dy: -1 },
+                ArrowDown: { dx: 0, dy: 1 },
+                ArrowLeft: { dx: -1, dy: 0 },
+                ArrowRight: { dx: 1, dy: 0 },
+                w: { dx: 0, dy: -1 },
+                s: { dx: 0, dy: 1 },
+                a: { dx: -1, dy: 0 },
+                d: { dx: 1, dy: 0 }
+            };
+
+            if (moveKeys[e.key]) {
+                movePlayer(moveKeys[e.key].dx, moveKeys[e.key].dy);
+                return;
+            }
+
+            // Other actions
+            switch (e.key.toLowerCase()) {
+                case "i":
+                    showInventory();
+                    break;
+                case "u":
+                    if (game.player.inventory.length > 0) {
+                        showInventory();
+                    }
+                    break;
+                case "d":
+                    if (game.player.inventory.length > 0) {
+                        showInventory();
+                    }
+                    break;
+                case "m":
+                    showSpellMenu();
+                    break;
+                case "?":
+                    showHelp();
+                    break;
+                case "q":
+                    if (confirm("Quit the game?")) {
+                        game.gameOver = true;
+                        addToast("Game quit.", "system");
+                    }
+                    break;
+                case "1":
+                case "2":
+                case "3":
+                case "4":
+                    if (game.player.selectedSpell) {
+                        castSpell(e.key);
+                    }
+                    break;
+            }
+        });
+
+        // Start the game
+        init();
+    </script>
+</body>
+</html>
