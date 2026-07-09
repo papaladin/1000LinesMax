@@ -220,20 +220,15 @@ function render() {
     for(let x=0; x<W; x++) {
       let c = game.map[y][x];
       let cls = "";
-      if(c==="🟫") cls="wall";
+      const e = game.enemies.find(e=>e.x===x&&e.y===y);
+      const it = e ? null : game.items.find(i=>i.x===x&&i.y===y);
+      if (e) { c = e.char; cls = e.isBoss ? "boss" : "enemy"; }
+      else if (it) { c = it.char; cls = "item"; }
+      else if(c==="🟫") cls="wall";
       else if(c==="░") cls="floor";
       else if(c==="🧙") cls="player";
       else if(c==="🚪") cls="stairs";
       else if(c==="🔥") cls="torch";
-      else if(c==="💊") cls="item";
-      else {
-        const e = game.enemies.find(e=>e.x===x&&e.y===y);
-        if (e) { c = e.char; cls = e.isBoss ? "boss" : "enemy"; }
-        else {
-          const it = game.items.find(i=>i.x===x&&i.y===y);
-          if (it) { c = it.char; cls = "item"; }
-        }
-      }
       o += `<div class="cell ${cls}"><span>${c}</span></div>`;
     }
   }
