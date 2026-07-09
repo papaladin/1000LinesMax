@@ -2,205 +2,171 @@
 <html>
 <head>
 <meta charset="UTF-8" name="viewport" content="width=device-width,initial-scale=1.0">
-<title>1000 Lines Dungeon</title>
+<title>Minimal Dungeon</title>
 <style>
 body{font-family:monospace;background:#000;color:#fff;margin:0;padding:10px}
-#game{white-space:pre;font-size:16px;line-height:1;margin-bottom:10px}
+#game{white-space:pre;font-size:20px;line-height:1;margin-bottom:10px}
 #stats{margin-bottom:10px}
-#log{height:60px;overflow-y:auto;margin-bottom:10px}
+#log{height:40px;overflow-y:auto;margin-bottom:10px}
 #action-bar{display:flex;justify-content:center;gap:5px;padding:5px;background:#222;position:fixed;bottom:0;left:0;right:0}
-.action-button{flex:1;padding:8px;background:#333;border:1px solid #444;color:#fff;text-align:center;cursor:pointer}
+.action-button{flex:1;padding:8px;background:#333;border:1px solid #444;color:#fff;cursor:pointer}
 .wall{color:#555}.player{color:#ff0}.enemy{color:#f00}.item{color:#0f0}.stairs{color:#0ff}
-@media (max-width:768px){#action-bar{display:flex}.action-button{min-width:36px;font-size:14px}}
+@media (max-width:768px){#action-bar{display:flex}}
 </style>
 </head>
 <body>
-<div id="stats">HP: <span id="hp">100</span> | MP: <span id="mp">50</span> | Gold: <span id="gold">0</span> | Depth: <span id="depth">1</span></div>
+<div id="stats">HP: <span id="hp">10</span> | Gold: <span id="gold">0</span> | Depth: <span id="depth">1</span></div>
 <div id="game"></div>
 <div id="log"></div>
 <div id="action-bar">
 <button class="action-button" onclick="movePlayer(0,-1)">↑</button>
-<button class="action-button" onclick="showInventory()">I</button>
+<button class="action-button" onclick="showHelp()">?</button>
 <button class="action-button" onclick="movePlayer(-1,0)">←</button>
 <button class="action-button" onclick="movePlayer(0,1)">↓</button>
-<button class="action-button" onclick="showSpellMenu()">M</button>
 <button class="action-button" onclick="movePlayer(1,0)">→</button>
-<button class="action-button" onclick="showHelp()">?</button>
 <button class="action-button" onclick="restartGame()">R</button>
 </div>
 
-<!-- ===== INLINED ROT.JS (MINIMAL: Digger + FOV + AStar) ==== -->
-<script>
-var ROT={};
-ROT.Util={clone:function(a){return JSON.parse(JSON.stringify(a))}};
-ROT.Map={};
-ROT.Map.Digger=function(w,h,o){this._w=w;this._h=h;this._o=o||{};this._m=[];this._r=[];this._cb=null};
-ROT.Map.Digger.prototype={create:function(cb){this._cb=cb;this._m=this._fill(" ");this._digRooms();this._digCorridors();for(let i=0;i<this._w;i++)for(let j=0;j<this._h;j++)this._cb(i,j,this._m[j][i])},_fill:function(v){let m=[];for(let j=0;j<this._h;j++){m.push([]);for(let i=0;i<this._w;i++)m[j].push(v)}return m},_digRooms:function(){const rc=Math.floor((this._w*this._h)/40);for(let i=0;i<rc;i++){const w=3+Math.floor(Math.random()*5),h=3+Math.floor(Math.random()*3),x=1+Math.floor(Math.random()*(this._w-w-1)),y=1+Math.floor(Math.random()*(this._h-h-1));this._r.push({x1:x,y1:y,x2:x+w-1,y2:y+h-1});for(let dx=0;dx<w;dx++)for(let dy=0;dy<h;dy++)this._m[y+dy][x+dx]="."}},_digCorridors:function(){for(let i=1;i<this._r.length;i++){const r=this._r[i],p=this._r[i-1],x=Math.floor((r.x1+r.x2)/2),y=Math.floor((r.y1+r.y2)/2),px=Math.floor((p.x1+p.x2)/2),py=Math.floor((p.y1+p.y2)/2);this._digCorridor(px,py,x,y)}},_digCorridor:function(x1,y1,x2,y2){if(Math.random()<0.5){this._digH(x1,y1,x2);this._digV(x2,y1,y2)}else{this._digV(x1,y1,y2);this._digH(x1,y2,x2)}},_digH:function(x1,y,x2){const s=Math.min(x1,x2),e=Math.max(x1,x2);for(let i=s;i<=e;i++)this._m[y][i]="."}_digV:function(x,y1,y2){const s=Math.min(y1,y2),e=Math.max(y1,y2);for(let i=s;i<=e;i++)this._m[i][x]="."}};
-ROT.FOV={};
-ROT.FOV.Precise=function(){this._lp=function(x,y){return true}};
-ROT.FOV.Precise.prototype.compute=function(x,y,R,cb){for(let cx=x-R;cx<=x+R;cx++)for(let cy=y-R;cy<=y+R;cy++)if((cx-x)*(cx-x)+(cy-y)*(cy-y)<=R*R&&this._lp(cx,cy))cb(cx,cy,0,1)};
-ROT.Path={};
-ROT.Path.AStar=function(tx,ty,pc){this._tx=tx;this._ty=ty;this._pc=pc};
-ROT.Path.AStar.prototype.compute=function(fx,fy){const path=[],ol=[{x:fx,y:fy,g:0,h:Math.abs(fx-this._tx)+Math.abs(fy-this._ty)}],c={};while(ol.length){ol.sort((a,b)=>(a.g+a.h)-(b.g+b.h));const cur=ol.shift();if(cur.x===this._tx&&cur.y===this._ty){path.push({x:cur.x,y:cur.y});return path}c[`${cur.x},${cur.y}`]=true;const nb=[{x:cur.x+1,y:cur.y},{x:cur.x-1,y:cur.y},{x:cur.x,y:cur.y+1},{x:cur.x,y:cur.y-1}];for(const n of nb){if(c[`${n.x},${n.y}`])continue;if(!this._pc(n.x,n.y))continue;const g=cur.g+1,h=Math.abs(n.x-this._tx)+Math.abs(n.y-this._ty);ol.push({x:n.x,y:n.y,g,h})}}return path};
-</script>
-
-<!-- ===== INLINED CHANCE.JS (MINIMAL) ==== -->
-<script>
-var Chance=function(){};
-Chance.prototype={integer:function(o){const m=o?o.min||0:0,M=o?o.max||1:1;return Math.floor(Math.random()*(M-m+1))+m},pickone:function(a){return a[this.integer({min:0,max:a.length-1})]},weighted:function(a,w){let t=0;for(let i=0;i<w.length;i++)t+=w[i];let r=this.integer({min:0,max:t-1});for(let i=0;i<a.length;i++){r-=w[i];if(r<0)return a[i]}return a[a.length-1]},bool:function(o){const l=o?o.likelihood||50:50;return Math.random()*100<l},name:function(){const f=["A","B","C","D","E","F","G","H"],l=["or","ax","ob","um","ji"];return f[this.integer({min:0,max:f.length-1})]+l[this.integer({min:0,max:l.length-1})]}};
-</script>
-
-<!-- ===== GAME CODE ==== -->
-<script>
-const W=20,H=15,game={player:{x:1,y:1,hp:100,maxHp:100,mp:50,maxMp:50,gold:0,hunger:100,inventory:[],equipped:{weapon:null,armor:null},spells:[{name:"Fireball",cost:15,range:5,damage:20},{name:"Heal",cost:10,damage:-30},{name:"Teleport",cost:20,damage:0},{name:"Lightning",cost:25,range:8,damage:30}],selectedSpell:null,poisoned:0},map:[],enemies:[],items:[],traps:[],depth:1,log:[],fov:new ROT.FOV.Precise(),chance:new Chance(),visible:[],explored:[],gameOver:false,turn:0};
-
-const ENEMY_TYPES=[{char:"g",name:"Goblin",hp:20,damage:{min:3,max:8},xp:10},{char:"O",name:"Ogre",hp:50,damage:{min:8,max:15},xp:25},{char:"D",name:"Dragon",hp:100,damage:{min:15,max:30},xp:50}];
-const ITEM_TYPES=[{char:"!",type:"potion",name:"Health Potion",effect:"heal",value:30,weight:0.6},{char:"$",type:"gold",name:"Gold",effect:"gold",value:50,weight:0.3},{char:"|",type:"weapon",name:"Sword",effect:"equip",damage:5,weight:0.2},{char:"=",type:"armor",name:"Armor",effect:"equip",defense:3,weight:0.2},{char:"%",type:"food",name:"Food",effect:"eat",value:40,weight:0.3}];
-const TRAP_TYPES=[{char:"^",name:"Pit",damage:15,effect:"damage"},{char:"^",name:"Poison",effect:"poison",turns:5},{char:"^",name:"Spikes",damage:10,effect:"damage"}];
-
-function init(){game.player={x:1,y:1,hp:game.player.maxHp,mp:game.player.maxMp,gold:0,hunger:100,inventory:[],equipped:{weapon:null,armor:null},spells:game.player.spells,selectedSpell:null,poisoned:0};game.enemies=[];game.items=[];game.traps=[];game.depth=1;game.log=[];game.gameOver=false;game.turn=0;generateDungeon();render();addToast("Welcome! Find > to descend.")}
-
-function generateDungeon(){game.map=[];game.enemies=[];game.items=[];game.traps=[];game.visible=[];game.explored=[];
-for(let y=0;y<H;y++){game.map[y]=[];game.visible[y]=[];game.explored[y]=[];for(let x=0;x<W;x++){game.map[y][x]=" ";game.visible[y][x]=false;game.explored[y][x]=false}}
-const digger=new ROT.Map.Digger(W,H,{roomWidth:[3,6],roomHeight:[3,3],corridorLength:[3,6]});
-digger.create((x,y,v)=>{game.map[y][x]=v===1?"█":"."});placeStairs();placePlayer();placeEnemies(Math.min(3+game.depth,10));placeItems(Math.min(5+game.depth,10));placeTraps(Math.min(2+Math.floor(game.depth/2),5));updateFOV()}
-
-function placeStairs(){let x,y;do{x=game.chance.integer({min:1,max:W-2});y=game.chance.integer({min:1,max:H-2})}while(game.map[y][x]!==".");game.map[y][x]=">"}
-function placePlayer(){let x,y;do{x=game.chance.integer({min:1,max:W-2});y=game.chance.integer({min:1,max:H-2})}while(game.map[y][x]!==".");game.player.x=x;game.player.y=y;game.map[y][x]="@"}
-
-function placeEnemies(c){for(let i=0;i<c;i++){let x,y;do{x=game.chance.integer({min:1,max:W-2});y=game.chance.integer({min:1,max:H-2})}while(game.map[y][x]!==".");
-const et=game.chance.weighted(ENEMY_TYPES,ENEMY_TYPES.map(e=>100-e.xp*game.depth/2));
-game.enemies.push({x,y,char:et.char,name:et.name,hp:et.hp+game.depth*3,maxHp:et.hp+game.depth*3,damage:{min:et.damage.min+Math.floor(game.depth/2),max:et.damage.max+game.depth},xp:et.xp*game.depth});game.map[y][x]=et.char}}
-
-function placeItems(c){for(let i=0;i<c;i++){let x,y;do{x=game.chance.integer({min:1,max:W-2});y=game.chance.integer({min:1,max:H-2})}while(game.map[y][x]!==".");
-const it=game.chance.weighted(ITEM_TYPES,ITEM_TYPES.map(i=>i.weight*100));const item={x,y,char:it.char,type:it.type,name:it.name,effect:it.effect};
-if(it.effect==="heal")item.value=it.value;if(it.effect==="gold")item.value=it.value*game.depth;if(it.effect==="equip"){item.damage=it.damage||0;item.defense=it.defense||0}if(it.effect==="eat")item.value=it.value;
-game.items.push(item);game.map[y][x]=it.char}}
-
-function placeTraps(c){for(let i=0;i<c;i++){let x,y;do{x=game.chance.integer({min:1,max:W-2});y=game.chance.integer({min:1,max:H-2})}while(game.map[y][x]!==".");
-const tt=game.chance.pickone(TRAP_TYPES);game.traps.push({x,y,char:tt.char,name:tt.name,effect:tt.effect,damage:tt.damage,turns:tt.turns||0});game.map[y][x]=tt.char}}
-
-function updateFOV(){game.fov._lp=(x,y)=>(x>=0&&x<W&&y>=0&&y<H&&game.map[y][x]!=="█");game.fov.compute(game.player.x,game.player.y,8,(x,y,r,v)=>{if(x>=0&&x<W&&y>=0&&y<H){game.visible[y][x]=v>0;if(v>0)game.explored[y][x]=true}})}
-
-function render(){let o="";for(let y=0;y<H;y++){for(let x=0;x<W;x++){if(!game.explored[y][x]){o+=" ";continue}
-let c=game.map[y][x],cn="",cl="";if(x===game.player.x&&y===game.player.y){c="@";cn="player"}else if(game.enemies.some(e=>e.x===x&&e.y===y)){const e=game.enemies.find(e=>e.x===x&&e.y===y);c=e.char;cn="enemy";cl=e.color}
-else if(game.items.some(i=>i.x===x&&i.y===y)){const i=game.items.find(i=>i.x===x&&i.y===y);c=i.char;cn="item";cl=i.color}
-else if(game.traps.some(t=>t.x===x&&t.y===y)&&game.visible[y][x]){c="^";cn="trap"}else if(c===">"){cn="stairs"}else if(c==="█"){cn="wall"}
-if(!game.visible[y][x]&&game.explored[y][x]){cn+=" explored";c=c==="."?",":c==="█"?"▓":c}if(!game.visible[y][x]&&!game.explored[y][x]){c=" ";cn=""}
-if(cn)o+=`<span class="${cn}" style="color:${cl}">${c}</span>`;else o+=c}o+="\n"}document.getElementById("game").innerHTML=o;
-document.getElementById("hp").textContent=game.player.hp;document.getElementById("mp").textContent=game.player.mp;
-document.getElementById("gold").textContent=game.player.gold;document.getElementById("depth").textContent=game.depth}
-
-function addToast(m,t="system"){const l=document.getElementById("log");l.innerHTML+=`<span class="message-${t}">${m}</span><br>`;l.scrollTop=l.scrollHeight}
-
-function movePlayer(dx,dy){if(game.gameOver)return;const nx=game.player.x+dx,ny=game.player.y+dy;
-if(nx<0||nx>=W||ny<0||ny>=H||game.map[ny][nx]==="█"){addToast("Can't move there!");return}
-const ei=game.enemies.findIndex(e=>e.x===nx&&e.y===ny);if(ei!==-1){combat(ei);return}
-const ii=game.items.findIndex(i=>i.x===nx&&i.y===ny);if(ii!==-1)pickUpItem(ii);
-const ti=game.traps.findIndex(t=>t.x===nx&&t.y===ny);if(ti!==-1){triggerTrap(ti);return}
-if(game.map[ny][nx]===">"){nextLevel();return}
-game.map[game.player.y][game.player.x]=".";game.player.x=nx;game.player.y=ny;game.map[ny][nx]="@";
-game.turn++;if(game.turn%10===0){game.player.hunger--;if(game.player.hunger<=0){game.player.hp--;addToast("Starving! HP -1")}}
-if(game.player.poisoned>0){game.player.hp-=2;game.player.poisoned--;addToast("Poison! HP -2")}
-if(game.player.hp<=0){gameOver();return}enemiesTurn();updateFOV();render()}
-
-function combat(ei){const e=game.enemies[ei];const pd=game.chance.integer({min:5+(game.player.equipped.weapon?game.player.equipped.weapon.damage:0),max:10+(game.player.equipped.weapon?game.player.equipped.weapon.damage:0)});
-e.hp-=pd;addToast(`Hit ${e.name} for ${pd}!`,"player");if(e.hp<=0){game.enemies.splice(ei,1);game.map[e.y][e.x]="+";game.player.gold+=e.xp/2;addToast(`Killed ${e.name}! +${e.xp/2} gold.`,"player");return}
-const ed=Math.max(1,game.chance.integer({min:e.damage.min,max:e.damage.max})-(game.player.equipped.armor?game.player.equipped.armor.defense:0));
-game.player.hp-=ed;addToast(`${e.name} hits for ${ed}!`,"enemy");if(game.player.hp<=0)gameOver()}
-
-function enemiesTurn(){game.enemies.forEach(e=>{if(e.hp<=0)return;if(game.visible[e.y][e.x]){
-const p=new ROT.Path.AStar(game.player.x,game.player.y,(x,y)=>(x>=0&&x<W&&y>=0&&y<H&&game.map[y][x]!=="█"&&game.map[y][x]!==">"));
-const path=p.compute(e.x,e.y);if(path.length>1){const nx=path[1].x,ny=path[1].y;if(game.map[ny][nx]==="."){
-game.map[e.y][e.x]=".";e.x=nx;e.y=ny;game.map[ny][nx]=e.char}}}})}
-
-function pickUpItem(ii){const i=game.items[ii];game.player.inventory.push(i);game.items.splice(ii,1);game.map[i.y][i.x]=".";addToast(`Picked up ${i.name}!`,"item")}
-
-function triggerTrap(ti){const t=game.traps[ti];game.traps.splice(ti,1);game.map[t.y][t.x]="^";
-if(t.effect==="damage"){game.player.hp-=t.damage;addToast(`Triggered ${t.name}! HP -${t.damage}`)}else if(t.effect==="poison"){game.player.poisoned=t.turns;addToast(`Poisoned for ${t.turns} turns!`)}
-if(game.player.hp<=0)gameOver()}
-
-function nextLevel(){game.depth++;game.player.hp=Math.min(game.player.hp+20,game.player.maxHp);game.player.mp=Math.min(game.player.mp+10,game.player.maxMp);
-game.player.hunger=Math.min(game.player.hunger+30,100);addToast(`Depth ${game.depth}...`);generateDungeon()}
-
-function gameOver(){game.gameOver=true;addToast("You died! Press R to restart.")}
-
-function showInventory(){const ie=document.getElementById("inventory-items");
-if(game.player.inventory.length===0){ie.innerHTML="<div>Empty.</div>";}else{ie.innerHTML=game.player.inventory.map((i,idx)=>
-`<div class="inventory-item" onclick="useItem(${idx})" oncontextmenu="dropItem(${idx});return false;">
-${i.char} - ${i.name}${i.type==="weapon"?` (DMG:+${i.damage})`:"">${i.type==="armor"?` (DEF:+${i.defense})`:"">${i.type==="potion"&&i.effect==="heal"?` (Heals ${i.value} HP)`:""} ${i.type==="food"?`(Restores ${i.value} hunger)`:""} ${i.type==="gold"?`(${i.value} gold)`:""} <div style="font-size:10px;color:#888;">Tap to use, long-press to drop</div></div>`).join("")}
-document.getElementById("inventory").style.display="block"}
-
-function hideInventory(){document.getElementById("inventory").style.display="none"}
-function useItem(i){const item=game.player.inventory[i];
-if(item.type==="potion"&&item.effect==="heal"){game.player.hp=Math.min(game.player.hp+item.value,game.player.maxHp);addToast(`Drank ${item.name}. HP +${item.value}`,"item")}
-else if(item.type==="potion"&&item.effect==="mana"){game.player.mp=Math.min(game.player.mp+item.value,game.player.maxMp);addToast(`Drank ${item.name}. MP +${item.value}`,"item")}
-else if(item.type==="food"){game.player.hunger=Math.min(game.player.hunger+item.value,100);addToast(`Ate ${item.name}. Hunger +${item.value}`,"item")}
-else if(item.type==="weapon"){if(game.player.equipped.weapon)game.player.inventory.push(game.player.equipped.weapon);game.player.equipped.weapon=item;addToast(`Equipped ${item.name}.`,"item")}
-else if(item.type==="armor"){if(game.player.equipped.armor)game.player.inventory.push(game.player.equipped.armor);game.player.equipped.armor=item;addToast(`Equipped ${item.name}.`,"item")}
-game.player.inventory.splice(i,1);hideInventory();render()}
-
-function dropItem(i){const item=game.player.inventory[i];game.player.inventory.splice(i,1);
-let x,y;do{x=game.player.x+game.chance.integer({min:-1,max:1});y=game.player.y+game.chance.integer({min:-1,max:1})}while(x<0||x>=W||y<0||y>=H||game.map[y][x]!==".");
-item.x=x;item.y=y;game.items.push(item);game.map[y][x]=item.char;addToast(`Dropped ${item.name}.`,"item");hideInventory();render()}
-
-function showSpellMenu(){const ie=document.getElementById("inventory-items");
-ie.innerHTML=game.player.spells.map((s,i)=>
-`<div class="inventory-item" onclick="selectSpell(${i})">${i+1} - ${s.name} (Cost: ${s.cost} MP)<div style="font-size:12px;">${s.description}</div></div>`).join("");
-document.getElementById("inventory").style.display="block"}
-
-function selectSpell(i){game.player.selectedSpell=game.player.spells[i];hideInventory();addToast(`Selected ${game.player.selectedSpell.name}. Press 1-4 to cast.`)}
-
-function castSpell(d){if(!game.player.selectedSpell){addToast("No spell selected!");return}
-const s=game.player.selectedSpell;if(game.player.mp<s.cost){addToast("Not enough MP!");return}
-game.player.mp-=s.cost;game.player.selectedSpell=null;
-if(s.name==="Heal"){game.player.hp=Math.min(game.player.hp-s.damage,game.player.maxHp);addToast(`Cast ${s.name}. HP +${-s.damage}`,"player")}
-else if(s.name==="Teleport"){let x,y;do{x=game.chance.integer({min:1,max:W-2});y=game.chance.integer({min:1,max:H-2})}while(game.map[y][x]!==".");
-game.map[game.player.y][game.player.x]=".";game.player.x=x;game.player.y=y;game.map[y][x]="@";addToast(`Cast ${s.name}!`,"player")}
-else if(s.name==="Fireball"||s.name==="Lightning"){const dx={1:1,2:0,3:-1,4:0}[d],dy={1:0,2:1,3:0,4:-1}[d];
-let x=game.player.x,y=game.player.y,distance=0;while(distance<s.range){x+=dx;y+=dy;distance++;
-if(x<0||x>=W||y<0||y>=H||game.map[y][x]==="█")break;const ei=game.enemies.findIndex(e=>e.x===x&&e.y===y);
-if(ei!==-1){game.enemies[ei].hp-=s.damage;addToast(`${s.name} hits ${game.enemies[ei].name} for ${s.damage}!`,"player");
-if(game.enemies[ei].hp<=0){game.enemies.splice(ei,1);game.map[y][x]="+";addToast(`Killed ${game.enemies[ei].name}!`,"player")}break}}
-}render()}
-
-function showHelp(){document.getElementById("help").style.display="block"}
-function hideHelp(){document.getElementById("help").style.display="none"}
-function restartGame(){init();hideInventory();hideHelp()}
-
-// Touch support for grid
-document.getElementById("game").addEventListener("click",(e)=>{if(game.gameOver)return;
-const cw=e.target.clientWidth/W,ch=e.target.clientHeight/H,x=Math.floor(e.offsetX/cw),y=Math.floor(e.offsetY/ch);
-const dx=x-game.player.x,dy=y-game.player.y;if(Math.abs(dx)+Math.abs(dy)===1)movePlayer(dx,dy)});
-
-// Keyboard controls
-document.addEventListener("keydown",(e)=>{if(game.gameOver){if(e.key.toLowerCase()==="r")restartGame();return}
-if(e.key==="Escape"){hideInventory();hideHelp();game.player.selectedSpell=null;return}
-const mk={ArrowUp:{dx:0,dy:-1},ArrowDown:{dx:0,dy:1},ArrowLeft:{dx:-1,dy:0},ArrowRight:{dx:1,dy:0},w:{dx:0,dy:-1},s:{dx:0,dy:1},a:{dx:-1,dy:0},d:{dx:1,dy:0}};
-if(mk[e.key]){movePlayer(mk[e.key].dx,mk[e.key].dy);return}
-switch(e.key.toLowerCase()){case"i":showInventory();break;case"m":showSpellMenu();break;case"?":showHelp();break;case"1":case"2":case"3":case"4":if(game.player.selectedSpell)castSpell(e.key);break}});
-
-// Initialize
-init();
-</script>
-
-<!-- Modals -->
-<div id="inventory" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#222;border:2px solid #444;padding:20px;z-index:100;max-width:80%;max-height:80%;overflow:auto;">
-  <div style="text-align:center;margin-bottom:10px;font-weight:bold;">Inventory</div>
-  <div id="inventory-items"></div>
-  <div style="text-align:center;margin-top:10px;padding:5px;background:#444;cursor:pointer;" onclick="hideInventory()">Close</div>
-</div>
-
-<div id="help" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#222;border:2px solid #444;padding:20px;z-index:100;max-width:80%;max-height:80%;overflow:auto;">
-  <div style="font-size:14px;line-height:1.5;">
-    <h3>1000 Lines Dungeon Crawler</h3>
-    <p><strong>Desktop:</strong> Arrow Keys/WASD to move, I=Inventory, M=Magic, ?=Help, R=Restart, 1-4=Cast Spell</p>
-    <p><strong>Mobile:</strong> Tap arrows or grid to move, tap buttons for actions</p>
-    <p><strong>Combat:</strong> Bump into enemies to attack</p>
-    <p><strong>Items:</strong> !=Potion, $=Gold, |=Weapon, ==Armor, %=Food</p>
-    <p><strong>Stairs:</strong> > to descend</p>
-  </div>
+<div id="help" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#222;border:2px solid #444;padding:20px;z-index:100;">
+  <p>↑↓←→: Move<br>?: Help<br>R: Restart<br>Bump into enemies to attack<br>Find > to descend</p>
   <div style="text-align:center;margin-top:10px;padding:5px;background:#444;cursor:pointer;" onclick="hideHelp()">Close</div>
 </div>
+
+<script>
+// ===== GAME STATE =====
+const W=20,H=10,game={player:{x:1,y:1,hp:10,maxHp:10,gold:0},map:[],enemies:[],items:[],depth:1,gameOver:false};
+
+// ===== DUNGEON GENERATION (NO LIBRARIES) =====
+function generateDungeon() {
+  game.map=Array(H).fill().map(()=>Array(W).fill("█")); // Start with all walls
+  // Dig rooms
+  for(let i=0;i<5;i++) {
+    const w=3+Math.floor(Math.random()*4),h=3+Math.floor(Math.random()*3);
+    const x=1+Math.floor(Math.random()*(W-w-1)),y=1+Math.floor(Math.random()*(H-h-1));
+    for(let dy=0;dy<h;dy++) for(let dx=0;dx<w;dx++) game.map[y+dy][x+dx]=".";
+  }
+  // Place player
+  let x,y;do{x=Math.floor(Math.random()*W);y=Math.floor(Math.random()*H)}while(game.map[y][x]!=".");
+  game.player.x=x;game.player.y=y;game.map[y][x]="@";
+  // Place stairs
+  do{x=Math.floor(Math.random()*W);y=Math.floor(Math.random()*H)}while(game.map[y][x]!=".");
+  game.map[y][x]=">";
+  // Place enemies
+  for(let i=0;i<3;i++) {
+    do{x=Math.floor(Math.random()*W);y=Math.floor(Math.random()*H)}while(game.map[y][x]!=".");
+    game.enemies.push({x,y,char:"g",hp:3,damage:1});game.map[y][x]="g";
+  }
+  // Place items
+  for(let i=0;i<2;i++) {
+    do{x=Math.floor(Math.random()*W);y=Math.floor(Math.random()*H)}while(game.map[y][x]!=".");
+    game.items.push({x,y,char:"!",type:"potion",value:3});game.map[y][x]="!";
+  }
+}
+
+// ===== RENDERING =====
+function render() {
+  let o="";for(let y=0;y<H;y++) {for(let x=0;x<W;x++) {
+    let c=game.map[y][x],cls="";if(x===game.player.x&&y===game.player.y){c="@";cls="player"}
+    else if(game.enemies.some(e=>e.x===x&&e.y===y)){cls="enemy"}
+    else if(game.items.some(i=>i.x===x&&i.y===y)){cls="item"}
+    else if(c===">"){cls="stairs"}else if(c==="█"){cls="wall"}
+    o+=`<span class="${cls}">${c}</span>`;}o+="\\n"}document.getElementById("game").innerHTML=o;
+  document.getElementById("hp").textContent=game.player.hp;
+  document.getElementById("gold").textContent=game.player.gold;
+  document.getElementById("depth").textContent=game.depth;
+}
+
+// ===== GAME LOGIC =====
+function init() {
+  game.player={x:1,y:1,hp:game.player.maxHp,gold:0};game.enemies=[];game.items=[];game.depth=1;game.gameOver=false;
+  generateDungeon();render();log("Welcome! Find > to descend.");
+}
+
+function log(msg) {const l=document.getElementById("log");l.innerHTML+=msg+"<br>";l.scrollTop=l.scrollHeight;}
+
+function movePlayer(dx,dy) {
+  if(game.gameOver) return;
+  const nx=game.player.x+dx,ny=game.player.y+dy;
+  if(nx<0||nx>=W||ny<0||ny>=H||game.map[ny][nx]==="█") {log("Can't move there!");return;}
+
+  // Check for enemies
+  const ei=game.enemies.findIndex(e=>e.x===nx&&e.y===ny);
+  if(ei!==-1) {combat(ei);return;}
+
+  // Check for items
+  const ii=game.items.findIndex(i=>i.x===nx&&i.y===ny);
+  if(ii!==-1) {pickUpItem(ii);return;}
+
+  // Check for stairs
+  if(game.map[ny][nx]===">") {nextLevel();return;}
+
+  // Move player
+  game.map[game.player.y][game.player.x]=".";game.player.x=nx;game.player.y=ny;game.map[ny][nx]="@";
+  enemiesTurn();render();
+}
+
+function combat(ei) {
+  const e=game.enemies[ei];
+  e.hp--;log(`Hit ${e.char} for 1 damage!`);
+  if(e.hp<=0) {game.enemies.splice(ei,1);game.map[e.y][e.x]=".";log("Killed enemy!");return;}
+  game.player.hp-=e.damage;log(`${e.char} hits you for ${e.damage} damage!`);
+  if(game.player.hp<=0) gameOver();
+}
+
+function enemiesTurn() {
+  game.enemies.forEach(e=> {
+    if(e.hp<=0) return;
+    // Simple AI: move randomly toward player
+    const dx=Math.sign(game.player.x-e.x),dy=Math.sign(game.player.y-e.y);
+    if(Math.random()<0.5) { // 50% chance to move
+      const nx=e.x+dx,ny=e.y+dy;
+      if(nx>=0&&nx<W&&ny>=0&&ny<H&&game.map[ny][nx]===".") {
+        game.map[e.y][e.x]=".";e.x=nx;e.y=ny;game.map[ny][nx]=e.char;
+      }
+    }
+  });
+}
+
+function pickUpItem(ii) {
+  const i=game.items[ii];
+  if(i.type==="potion") {game.player.hp=Math.min(game.player.hp+i.value,game.player.maxHp);log(`Drank potion! HP +${i.value}`);}
+  else if(i.type==="gold") {game.player.gold+=i.value;log(`Found ${i.value} gold!`);}
+  game.items.splice(ii,1);game.map[i.y][i.x]=".";render();
+}
+
+function nextLevel() {
+  game.depth++;game.player.hp=Math.min(game.player.hp+2,game.player.maxHp);
+  log(`Depth ${game.depth}...`);generateDungeon();
+}
+
+function gameOver() {game.gameOver=true;log("You died! Press R to restart.");}
+
+// ===== UI FUNCTIONS =====
+function showHelp() {document.getElementById("help").style.display="block";}
+function hideHelp() {document.getElementById("help").style.display="none";}
+function restartGame() {init();hideHelp();}
+
+// ===== INPUT HANDLING =====
+// Touch support for grid
+document.getElementById("game").addEventListener("click",(e)=> {
+  if(game.gameOver) return;
+  const cw=e.target.clientWidth/W,ch=e.target.clientHeight/H;
+  const x=Math.floor(e.offsetX/cw),y=Math.floor(e.offsetY/ch);
+  const dx=x-game.player.x,dy=y-game.player.y;
+  if(Math.abs(dx)+Math.abs(dy)===1) movePlayer(dx,dy);
+});
+
+// Keyboard controls
+document.addEventListener("keydown",(e)=> {
+  if(game.gameOver) {if(e.key.toLowerCase()==="r") restartGame();return}
+  if(e.key==="Escape") {hideHelp();return}
+  const mk={ArrowUp:{dx:0,dy:-1},ArrowDown:{dx:0,dy:1},ArrowLeft:{dx:-1,dy:0},ArrowRight:{dx:1,dy:0},w:{dx:0,dy:-1},s:{dx:0,dy:1},a:{dx:-1,dy:0},d:{dx:1,dy:0}};
+  if(mk[e.key]) {movePlayer(mk[e.key].dx,mk[e.key].dy);return}
+  if(e.key==="?") showHelp();
+});
+
+// Start the game
+init();
+</script>
 </body>
 </html>
