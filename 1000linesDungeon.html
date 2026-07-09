@@ -9,45 +9,60 @@ body{font-family:monospace;background:#000;color:#fff;margin:0;padding:10px;touc
 #stats{margin-bottom:5px;font-size:4vw}
 #legend{font-size:3vw;margin-bottom:5px;color:#888}
 #log{height:10vw;overflow-y:auto;margin-bottom:5px;font-size:3vw}
-#action-bar{display:flex;justify-content:center;gap:1vw;padding:1vw;background:#222;position:fixed;bottom:0;left:0;right:0}
-.action-button{flex:1;padding:2vw;background:#333;border:1px solid #444;color:#fff;cursor:pointer;font-size:4vw}
-.wall{color:#555}.player{color:#ff0}.enemy{color:#f00}.item{color:#0f0}.stairs{color:#0ff}
+#action-bar{display:flex;flex-direction:column;gap:1vw;padding:1vw;background:#222;position:fixed;bottom:0;left:0;right:0}
+#row-1{display:flex;justify-content:center;gap:1vw}
+#row-2{display:flex;justify-content:space-between;gap:1vw}
+.action-button{flex:1;padding:2vw;background:#333;border:1px solid #444;color:#fff;cursor:pointer;font-size:4vw;min-width:12vw}
+.wall{color:#8B4513}.floor{color:#333}.player{color:#ff0}.enemy{color:#f00}.stairs{color:#0ff}.torch{color:#ff4500;animation:torchGlow 1.5s infinite}
+@keyframes torchGlow{
+  0%{text-shadow:0 0 5px #ff4500,0 0 10px #ff4500}
+  50%{text-shadow:0 0 10px #ff4500,0 0 20px #ff4500}
+  100%{text-shadow:0 0 5px #ff4500,0 0 10px #ff4500}
+}
 @media (min-width: 768px) {
   #game{font-size:20px}
   #stats,#legend{font-size:16px}
   #log{height:50px;font-size:14px}
-  .action-button{padding:8px;font-size:16px}
+  .action-button{padding:8px;font-size:16px;min-width:40px}
 }
 </style>
 </head>
 <body>
-<div id="stats">HP: <span id="hp">10</span> / <span id="max-hp">10</span> | Gold: <span id="gold">0</span> | Depth: <span id="depth">1</span></div>
+<div id="stats">HP: <span id="hp">10</span> / <span id="max-hp">10</span> | Depth: <span id="depth">1</span></div>
 <div id="legend">
-  <span class="player">@</span>=You |
-  <span class="enemy">g</span>=Goblin |
-  <span class="item">!</span>=Potion |
-  <span class="item">$</span>=Gold |
-  <span class="stairs">></span>=Stairs
+  <span class="player">🧙</span>=You |
+  <span class="enemy">👹</span>=Goblin |
+  <span class="enemy">🕷️</span>=Spider |
+  <span class="enemy">🐍</span>=Snake |
+  <span class="stairs">🚪</span>=Exit
 </div>
 <div id="game"></div>
 <div id="log"></div>
 <div id="action-bar">
-<button class="action-button" onclick="movePlayer(0,-1)">↑</button>
-<button class="action-button" onclick="showHelp()">?</button>
-<button class="action-button" onclick="movePlayer(-1,0)">←</button>
-<button class="action-button" onclick="movePlayer(0,1)">↓</button>
-<button class="action-button" onclick="movePlayer(1,0)">→</button>
-<button class="action-button" onclick="restartGame()">R</button>
+  <div id="row-1">
+    <button class="action-button" onclick="movePlayer(0,-1)">↑</button>
+  </div>
+  <div id="row-2">
+    <div>
+      <button class="action-button" onclick="movePlayer(-1,0)">←</button>
+      <button class="action-button" onclick="movePlayer(0,1)">↓</button>
+      <button class="action-button" onclick="movePlayer(1,0)">→</button>
+    </div>
+    <div>
+      <button class="action-button" onclick="showHelp()">?</button>
+      <button class="action-button" onclick="restartGame()">Reset</button>
+    </div>
+  </div>
 </div>
 
 <div id="help" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#222;border:2px solid #444;padding:20px;z-index:100;">
-  <p style="font-size:4vw;">↑↓←→: Move<br>?: Help<br>R: Restart<br>Enemies attack if adjacent!<br>Find &gt; to descend</p>
+  <p style="font-size:4vw;">↑↓←→: Move<br>?: Help<br>Reset: Restart<br>Enemies attack if adjacent!<br>Find 🚪 to descend</p>
   <div style="text-align:center;margin-top:10px;padding:5px;background:#444;cursor:pointer;font-size:4vw;" onclick="hideHelp()">Close</div>
 </div>
 
 <script>
 // ===== GAME STATE =====
-const W=20,H=12,game={player:{x:1,y:1,hp:10,maxHp:10,gold:0},map:[],enemies:[],items:[],depth:1,gameOver:false};
+const W=20,H=12,game={player:{x:1,y:1,hp:10,maxHp:10},map:[],enemies:[],depth:1,gameOver:false};
 
 // ===== PATHFINDING (BFS) =====
 function hasPath(startX, startY, endX, endY) {
@@ -59,7 +74,7 @@ function hasPath(startX, startY, endX, endY) {
     if (x === endX && y === endY) return true;
     const neighbors = [{x:x+1,y:y},{x:x-1,y:y},{x:x,y:y+1},{x:x,y:y-1}];
     for (const n of neighbors) {
-      if (n.x >= 0 && n.x < W && n.y >= 0 && n.y < H && !visited[n.y][n.x] && game.map[n.y][n.x] !== "█") {
+      if (n.x >= 0 && n.x < W && n.y >= 0 && n.y < H && !visited[n.y][n.x] && game.map[n.y][n.x] !== "🟫") {
         visited[n.y][n.x] = true;
         queue.push({x: n.x, y: n.y});
       }
@@ -70,21 +85,17 @@ function hasPath(startX, startY, endX, endY) {
 
 // ===== POSITION CHECKS =====
 function isPositionFree(x, y) {
-  // Check if position is within bounds and is a floor tile
-  if (x < 0 || x >= W || y < 0 || y >= H || game.map[y][x] !== ".") return false;
-  // Check if position is not too close to player (for enemies)
+  if (x < 0 || x >= W || y < 0 || y >= H || game.map[y][x] !== "░") return false;
   if (Math.abs(x - game.player.x) + Math.abs(y - game.player.y) < 2) return false;
-  // Check if position doesn't overlap with existing entities
-  if (game.map[y][x] === "@" || game.map[y][x] === ">" ||
-      game.enemies.some(e => e.x === x && e.y === y) ||
-      game.items.some(i => i.x === x && i.y === y)) {
+  if (game.map[y][x] === "🧙" || game.map[y][x] === "🚪" ||
+      game.enemies.some(e => e.x === x && e.y === y)) {
     return false;
   }
   return true;
 }
 
 // ===== PLACEMENT WITH CHECKS =====
-function placeAtReachablePosition(char, type, object) {
+function placeAtReachablePosition(char, type) {
   let x, y, attempts = 0;
   do {
     x = Math.floor(Math.random() * W);
@@ -94,62 +105,67 @@ function placeAtReachablePosition(char, type, object) {
   } while (!isPositionFree(x, y) || !hasPath(game.player.x, game.player.y, x, y));
 
   game.map[y][x] = char;
-  if (type === "stairs") game.map[y][x] = ">";
+  if (type === "stairs") game.map[y][x] = "🚪";
   else if (type === "enemy") game.enemies.push({x, y, char, hp: 3, damage: 1});
-  else if (type === "item") game.items.push({x, y, char, type: object.type, value: object.value});
+  else if (type === "torch") game.map[y][x] = "🔥";
   return true;
 }
 
 // ===== DUNGEON GENERATION =====
 function generateDungeon() {
-  game.map=Array(H).fill().map(()=>Array(W).fill("█"));
-  game.enemies=[];game.items=[];
+  game.map=Array(H).fill().map(()=>Array(W).fill("🟫")); // Walls
+  game.enemies=[];
 
-  // Dig rooms
+  // Dig rooms (floors)
   for(let i=0;i<6;i++) {
     const w=3+Math.floor(Math.random()*5),h=3+Math.floor(Math.random()*4);
     const x=1+Math.floor(Math.random()*(W-w-1)),y=1+Math.floor(Math.random()*(H-h-1));
-    for(let dy=0;dy<h;dy++) for(let dx=0;dx<w;dx++) game.map[y+dy][x+dx]=".";
+    for(let dy=0;dy<h;dy++) for(let dx=0;dx<w;dx++) game.map[y+dy][x+dx]="░";
   }
 
   // Place player
-  let x,y;do{x=Math.floor(Math.random()*W);y=Math.floor(Math.random()*H)}while(game.map[y][x]!=".");
-  game.player.x=x;game.player.y=y;game.map[y][x]="@";
+  let x,y;do{x=Math.floor(Math.random()*W);y=Math.floor(Math.random()*H)}while(game.map[y][x]!="░");
+  game.player.x=x;game.player.y=y;game.map[y][x]="🧙";
 
-  // Place stairs (guaranteed reachable and not overlapping)
-  if (!placeAtReachablePosition(">", "stairs", {})) generateDungeon();
+  // Place stairs (door)
+  if (!placeAtReachablePosition("🚪", "stairs")) generateDungeon();
 
-  // Place enemies (guaranteed reachable, not overlapping, not adjacent to player)
-  for(let i=0;i<3;i++) {
-    if (!placeAtReachablePosition("g", "enemy", {})) break;
+  // Place torches (2-3 per level)
+  for(let i=0;i<2+Math.floor(Math.random()*2);i++) {
+    if (!placeAtReachablePosition("🔥", "torch")) break;
   }
 
-  // Place items (guaranteed reachable and not overlapping)
+  // Place enemies
   for(let i=0;i<3;i++) {
-    const itemType = Math.random() < 0.7 ? {type:"potion",value:3} : {type:"gold",value:5};
-    if (!placeAtReachablePosition("!", "item", itemType)) break;
+    const enemyTypes = ["👹", "🕷️", "🐍"];
+    const char = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
+    if (!placeAtReachablePosition(char, "enemy")) break;
   }
 }
 
 // ===== RENDERING =====
 function render() {
   let o="";for(let y=0;y<H;y++) {for(let x=0;x<W;x++) {
-    let c=game.map[y][x],cls="";if(x===game.player.x&&y===game.player.y){c="@";cls="player"}
-    else if(game.enemies.some(e=>e.x===x&&e.y===y)){cls="enemy"}
-    else if(game.items.some(i=>i.x===x&&i.y===y)){cls="item"}
-    else if(c===">"){cls="stairs"}else if(c==="█"){cls="wall"}
+    let c=game.map[y][x],cls="";
+    if(c==="🟫") cls="wall";
+    else if(c==="░") cls="floor";
+    else if(c==="🧙") cls="player";
+    else if(c==="🚪") cls="stairs";
+    else if(c==="🔥") cls="torch";
+    else if(game.enemies.some(e=>e.x===x&&e.y===y)) {
+      const e=game.enemies.find(e=>e.x===x&&e.y===y);c=e.char;cls="enemy";
+    }
     o+=`<span class="${cls}">${c}</span>`;}o+="<br>";}
   document.getElementById("game").innerHTML=o;
   document.getElementById("hp").textContent=game.player.hp;
   document.getElementById("max-hp").textContent=game.player.maxHp;
-  document.getElementById("gold").textContent=game.player.gold;
   document.getElementById("depth").textContent=game.depth;
 }
 
 // ===== GAME LOGIC =====
 function init() {
-  game.player={x:1,y:1,hp:10,maxHp:10,gold:0};game.depth=1;game.gameOver=false;
-  generateDungeon();render();log("Welcome! Find > to descend.");
+  game.player={x:1,y:1,hp:10,maxHp:10};game.depth=1;game.gameOver=false;
+  generateDungeon();render();log("Welcome! Find 🚪 to descend.");
 }
 
 function log(msg) {const l=document.getElementById("log");l.innerHTML+=msg+"<br>";l.scrollTop=l.scrollHeight;}
@@ -157,24 +173,21 @@ function log(msg) {const l=document.getElementById("log");l.innerHTML+=msg+"<br>
 function movePlayer(dx,dy) {
   if(game.gameOver) return;
   const nx=game.player.x+dx,ny=game.player.y+dy;
-  if(nx<0||nx>=W||ny<0||ny>=H||game.map[ny][nx]==="█") {log("Can't move there!");return;}
+  if(nx<0||nx>=W||ny<0||ny>=H||game.map[ny][nx]==="🟫") {log("Can't move there!");return;}
 
   const ei=game.enemies.findIndex(e=>e.x===nx&&e.y===ny);
   if(ei!==-1) {combat(ei);return;}
 
-  const ii=game.items.findIndex(i=>i.x===nx&&i.y===ny);
-  if(ii!==-1) {pickUpItem(ii);return;}
+  if(game.map[ny][nx]==="🚪") {nextLevel();return;}
 
-  if(game.map[ny][nx]===">") {nextLevel();return;}
-
-  game.map[game.player.y][game.player.x]=".";game.player.x=nx;game.player.y=ny;game.map[ny][nx]="@";
+  game.map[game.player.y][game.player.x]="░";game.player.x=nx;game.player.y=ny;game.map[ny][nx]="🧙";
   enemiesTurn();render();
 }
 
 function combat(ei) {
   const e=game.enemies[ei];
   e.hp--;log(`Hit ${e.char} for 1 damage!`);
-  if(e.hp<=0) {game.enemies.splice(ei,1);game.map[e.y][e.x]=".";log("Killed enemy!");return;}
+  if(e.hp<=0) {game.enemies.splice(ei,1);game.map[e.y][e.x]="░";log("Killed enemy!");return;}
   game.player.hp-=e.damage;log(`${e.char} hits you for ${e.damage} damage!`);
   if(game.player.hp<=0) gameOver();
 }
@@ -182,51 +195,29 @@ function combat(ei) {
 function enemiesTurn() {
   game.enemies.forEach(e=> {
     if(e.hp<=0) return;
-
-    // Check if enemy is adjacent to player (attack immediately)
-    const dx = Math.abs(e.x - game.player.x);
-    const dy = Math.abs(e.y - game.player.y);
-    if (dx + dy === 1) { // Adjacent
-      game.player.hp -= e.damage;
-      log(`${e.char} attacks! HP -${e.damage}`);
-      if(game.player.hp <= 0) gameOver();
-      return; // Skip movement if attacked
+    const dx=Math.abs(e.x-game.player.x),dy=Math.abs(e.y-game.player.y);
+    if(dx+dy===1) { // Adjacent: attack!
+      game.player.hp-=e.damage;log(`${e.char} attacks! HP -${e.damage}`);
+      if(game.player.hp<=0) gameOver();
+      return;
     }
-
-    // Otherwise, move toward player
-    const dirX = Math.sign(game.player.x - e.x);
-    const dirY = Math.sign(game.player.y - e.y);
-    if(Math.random() < 0.7) { // 70% chance to move
-      const nx = e.x + dirX;
-      const ny = e.y + dirY;
-      if(nx >= 0 && nx < W && ny >= 0 && ny < H && game.map[ny][nx] === ".") {
-        game.map[e.y][e.x] = ".";
-        e.x = nx;
-        e.y = ny;
-        game.map[ny][nx] = e.char;
+    // Move toward player
+    const dirX=Math.sign(game.player.x-e.x),dirY=Math.sign(game.player.y-e.y);
+    if(Math.random()<0.7) {
+      const nx=e.x+dirX,ny=e.y+dirY;
+      if(nx>=0&&nx<W&&ny>=0&&ny<H&&game.map[ny][nx]==="░") {
+        game.map[e.y][e.x]="░";e.x=nx;e.y=ny;game.map[ny][nx]=e.char;
       }
     }
   });
 }
 
-function pickUpItem(ii) {
-  const i=game.items[ii];
-  if(i.type==="potion") {
-    game.player.hp=Math.min(game.player.hp+i.value, game.player.maxHp);
-    log(`Drank potion! HP +${i.value} (now ${game.player.hp}/${game.player.maxHp})`);
-  } else if(i.type==="gold") {
-    game.player.gold+=i.value;
-    log(`Found ${i.value} gold!`);
-  }
-  game.items.splice(ii,1);game.map[i.y][i.x]=".";render();
-}
-
 function nextLevel() {
-  game.depth++;game.player.hp=Math.min(game.player.hp+2, game.player.maxHp);
+  game.depth++;game.player.hp=Math.min(game.player.hp+2,game.player.maxHp);
   log(`Depth ${game.depth}...`);generateDungeon();
 }
 
-function gameOver() {game.gameOver=true;log("You died! Press R to restart.");}
+function gameOver() {game.gameOver=true;log("You died! Press Reset.");}
 
 function showHelp() {document.getElementById("help").style.display="block";}
 function hideHelp() {document.getElementById("help").style.display="none";}
