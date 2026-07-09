@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8" name="viewport" content="width=device-width,initial-scale=1.0">
+<meta charset="UTF-8" name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
 <title>Dungeon Crawler</title>
 <style>
-body{font-family:monospace;background:#000;color:#fff;margin:0;padding:10px}
-#game{white-space:pre-wrap;font-size:5vw;line-height:1.2;margin:5px 0;max-width:100vw;overflow-x:hidden}
+body{font-family:monospace;background:#000;color:#fff;margin:0;padding:10px;touch-action:manipulation}
+#game{white-space:pre-wrap;font-size:5vw;line-height:1.2;margin:5px 0;max-width:100vw;overflow-x:hidden;touch-action:manipulation}
 #stats{margin-bottom:5px;font-size:4vw}
 #legend{font-size:3vw;margin-bottom:5px;color:#888}
 #log{height:10vw;overflow-y:auto;margin-bottom:5px;font-size:3vw}
@@ -22,7 +22,13 @@ body{font-family:monospace;background:#000;color:#fff;margin:0;padding:10px}
 </head>
 <body>
 <div id="stats">HP: <span id="hp">10</span> / <span id="max-hp">10</span> | Gold: <span id="gold">0</span> | Depth: <span id="depth">1</span></div>
-<div id="legend">@=You | g=Goblin | !=Potion | $=Gold | &gt;=Stairs</div>
+<div id="legend">
+  <span class="player">@</span>=You |
+  <span class="enemy">g</span>=Goblin |
+  <span class="item">!</span>=Potion |
+  <span class="item">$</span>=Gold |
+  <span class="stairs">></span>=Stairs
+</div>
 <div id="game"></div>
 <div id="log"></div>
 <div id="action-bar">
@@ -35,7 +41,7 @@ body{font-family:monospace;background:#000;color:#fff;margin:0;padding:10px}
 </div>
 
 <div id="help" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#222;border:2px solid #444;padding:20px;z-index:100;">
-  <p style="font-size:4vw;">↑↓←→: Move<br>?: Help<br>R: Restart<br>Bump into enemies to attack<br>Find &gt; to descend</p>
+  <p style="font-size:4vw;">↑↓←→: Move<br>?: Help<br>R: Restart<br>Enemies attack if adjacent!<br>Find &gt; to descend</p>
   <div style="text-align:center;margin-top:10px;padding:5px;background:#444;cursor:pointer;font-size:4vw;" onclick="hideHelp()">Close</div>
 </div>
 
@@ -62,15 +68,30 @@ function hasPath(startX, startY, endX, endY) {
   return false;
 }
 
-// ===== PLACEMENT WITH PATH CHECK =====
+// ===== POSITION CHECKS =====
+function isPositionFree(x, y) {
+  // Check if position is within bounds and is a floor tile
+  if (x < 0 || x >= W || y < 0 || y >= H || game.map[y][x] !== ".") return false;
+  // Check if position is not too close to player (for enemies)
+  if (Math.abs(x - game.player.x) + Math.abs(y - game.player.y) < 2) return false;
+  // Check if position doesn't overlap with existing entities
+  if (game.map[y][x] === "@" || game.map[y][x] === ">" ||
+      game.enemies.some(e => e.x === x && e.y === y) ||
+      game.items.some(i => i.x === x && i.y === y)) {
+    return false;
+  }
+  return true;
+}
+
+// ===== PLACEMENT WITH CHECKS =====
 function placeAtReachablePosition(char, type, object) {
   let x, y, attempts = 0;
   do {
     x = Math.floor(Math.random() * W);
     y = Math.floor(Math.random() * H);
     attempts++;
-    if (attempts > 20) return false; // Give up after 20 attempts
-  } while (game.map[y][x] !== "." || !hasPath(game.player.x, game.player.y, x, y));
+    if (attempts > 20) return false;
+  } while (!isPositionFree(x, y) || !hasPath(game.player.x, game.player.y, x, y));
 
   game.map[y][x] = char;
   if (type === "stairs") game.map[y][x] = ">";
@@ -81,7 +102,7 @@ function placeAtReachablePosition(char, type, object) {
 
 // ===== DUNGEON GENERATION =====
 function generateDungeon() {
-  game.map=Array(H).fill().map(()=>Array(W).fill("█")); // Start with all walls
+  game.map=Array(H).fill().map(()=>Array(W).fill("█"));
   game.enemies=[];game.items=[];
 
   // Dig rooms
@@ -95,15 +116,15 @@ function generateDungeon() {
   let x,y;do{x=Math.floor(Math.random()*W);y=Math.floor(Math.random()*H)}while(game.map[y][x]!=".");
   game.player.x=x;game.player.y=y;game.map[y][x]="@";
 
-  // Place stairs (guaranteed reachable)
-  if (!placeAtReachablePosition(">", "stairs", {})) generateDungeon(); // Retry if failed
+  // Place stairs (guaranteed reachable and not overlapping)
+  if (!placeAtReachablePosition(">", "stairs", {})) generateDungeon();
 
-  // Place enemies (guaranteed reachable)
+  // Place enemies (guaranteed reachable, not overlapping, not adjacent to player)
   for(let i=0;i<3;i++) {
     if (!placeAtReachablePosition("g", "enemy", {})) break;
   }
 
-  // Place items (guaranteed reachable)
+  // Place items (guaranteed reachable and not overlapping)
   for(let i=0;i<3;i++) {
     const itemType = Math.random() < 0.7 ? {type:"potion",value:3} : {type:"gold",value:5};
     if (!placeAtReachablePosition("!", "item", itemType)) break;
@@ -161,11 +182,28 @@ function combat(ei) {
 function enemiesTurn() {
   game.enemies.forEach(e=> {
     if(e.hp<=0) return;
-    const dx=Math.sign(game.player.x-e.x),dy=Math.sign(game.player.y-e.y);
-    if(Math.random()<0.5) {
-      const nx=e.x+dx,ny=e.y+dy;
-      if(nx>=0&&nx<W&&ny>=0&&ny<H&&game.map[ny][nx]===".") {
-        game.map[e.y][e.x]=".";e.x=nx;e.y=ny;game.map[ny][nx]=e.char;
+
+    // Check if enemy is adjacent to player (attack immediately)
+    const dx = Math.abs(e.x - game.player.x);
+    const dy = Math.abs(e.y - game.player.y);
+    if (dx + dy === 1) { // Adjacent
+      game.player.hp -= e.damage;
+      log(`${e.char} attacks! HP -${e.damage}`);
+      if(game.player.hp <= 0) gameOver();
+      return; // Skip movement if attacked
+    }
+
+    // Otherwise, move toward player
+    const dirX = Math.sign(game.player.x - e.x);
+    const dirY = Math.sign(game.player.y - e.y);
+    if(Math.random() < 0.7) { // 70% chance to move
+      const nx = e.x + dirX;
+      const ny = e.y + dirY;
+      if(nx >= 0 && nx < W && ny >= 0 && ny < H && game.map[ny][nx] === ".") {
+        game.map[e.y][e.x] = ".";
+        e.x = nx;
+        e.y = ny;
+        game.map[ny][nx] = e.char;
       }
     }
   });
@@ -175,7 +213,7 @@ function pickUpItem(ii) {
   const i=game.items[ii];
   if(i.type==="potion") {
     game.player.hp=Math.min(game.player.hp+i.value, game.player.maxHp);
-    log(`Drank potion! HP +${i.value} (now ${game.player.hp})`);
+    log(`Drank potion! HP +${i.value} (now ${game.player.hp}/${game.player.maxHp})`);
   } else if(i.type==="gold") {
     game.player.gold+=i.value;
     log(`Found ${i.value} gold!`);
