@@ -4,53 +4,71 @@
 <meta charset="UTF-8" name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
 <title>Dungeon Crawler</title>
 <style>
+*{box-sizing:border-box}
+html,body{width:100%;overflow-x:hidden}
 body{font-family:monospace;background:#000;color:#fff;margin:0;padding:10px;touch-action:manipulation}
 #game{
   display: grid;
   grid-template-columns: repeat(20, 1fr);
   gap: 0;
-  font-size: 5vw;
+  width: 100%;
   margin: 5px 0;
-  max-width: 100vw;
-  overflow-x: hidden;
+  overflow: hidden;
 }
 .cell {
   display: flex;
   justify-content: center;
   align-items: center;
   aspect-ratio: 1/1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  font-size: 4.6vw;
+  line-height: 1;
+}
+.cell > span{
+  display:inline-block;
+  max-width:100%;
+  overflow:hidden;
+  text-align:center;
+  transform:scale(1);
 }
 #stats{margin-bottom:5px;font-size:4vw}
+#stats2{margin-bottom:5px;font-size:3.2vw;color:#aaf}
 #legend{font-size:3vw;margin-bottom:5px;color:#888}
 #log{height:20vw;overflow-y:auto;margin-bottom:5px;font-size:3vw;min-height:8em}
 #action-bar{display:flex;flex-direction:column;gap:1vw;padding:1vw;background:#222;position:fixed;bottom:0;left:0;right:0}
 #row-1{display:flex;justify-content:center;gap:1vw}
 #row-2{display:flex;justify-content:space-between;gap:1vw}
 .action-button{flex:1;padding:2vw;background:#333;border:1px solid #444;color:#fff;cursor:pointer;font-size:4vw;min-width:12vw}
-.wall{color:#8B4513}.floor{color:#333}.player{color:#ff0}.enemy{color:#f00}.stairs{color:#0ff}.torch{color:#ff4500;animation:torchGlow 1.5s infinite}.item{color:#0f0}
+.wall{color:#8B4513}.floor{color:#333}.player{color:#ff0}.enemy{color:#f00}.stairs{color:#0ff}.torch{color:#ff4500;animation:torchGlow 1.5s infinite}.item{color:#0f0}.boss{color:#f0f}
 @keyframes torchGlow{
   0%{text-shadow:0 0 5px #ff4500,0 0 10px #ff4500}
   50%{text-shadow:0 0 10px #ff4500,0 0 20px #ff4500}
   100%{text-shadow:0 0 5px #ff4500,0 0 10px #ff4500}
 }
 @media (min-width: 768px) {
-  #game{font-size:20px}
   .cell { font-size: 20px; }
   #stats,#legend{font-size:16px}
+  #stats2{font-size:13px}
   #log{height:120px;font-size:14px;min-height:8em}
   .action-button{padding:8px;font-size:16px;min-width:40px}
 }
 </style>
 </head>
 <body>
-<div id="stats">HP: <span id="hp">10</span> / <span id="max-hp">10</span> | Depth: <span id="depth">1</span></div>
+<div id="stats">HP: <span id="hp">10</span> / <span id="max-hp">10</span> | Depth: <span id="depth">1</span> | Best: <span id="best">1</span></div>
+<div id="stats2">ATK: <span id="atk">1</span> | DEF: <span id="def">0</span></div>
 <div id="legend">
   <span class="player">🧙</span>=You |
   <span class="enemy">👹</span>=Goblin |
   <span class="enemy">🕷️</span>=Spider |
   <span class="enemy">🐍</span>=Snake |
+  <span class="boss">👺</span>=Boss |
   <span class="stairs">🚪</span>=Exit |
-  <span class="item">💊</span>=Potion
+  <span class="item">💊</span>=Potion |
+  <span class="item">⚔️</span>=Weapon |
+  <span class="item">🛡️</span>=Armor
 </div>
 <div id="game"></div>
 <div id="log"></div>
@@ -71,14 +89,29 @@ body{font-family:monospace;background:#000;color:#fff;margin:0;padding:10px;touc
   </div>
 </div>
 
-<div id="help" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#222;border:2px solid #444;padding:20px;z-index:100;">
-  <p style="font-size:4vw;">↑↓←→: Move<br>?: Help<br>Reset: Restart<br>Enemies attack if adjacent!<br>💊: +3 HP<br>Find 🚪 to descend</p>
+<div id="help" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#222;border:2px solid #444;padding:20px;z-index:100;max-width:90vw;">
+  <p style="font-size:4vw;">↑↓←→: Move<br>?: Help<br>Reset: Restart<br>Enemies attack if adjacent!<br>💊: +3 HP<br>⚔️: +1 Attack<br>🛡️: +1 Defense<br>👺 Bosses appear every 5 depths<br>Find 🚪 to descend</p>
   <div style="text-align:center;margin-top:10px;padding:5px;background:#444;cursor:pointer;font-size:4vw;" onclick="hideHelp()">Close</div>
 </div>
 
 <script>
 // ===== GAME STATE =====
-const W=20,H=12,game={player:{x:1,y:1,hp:10,maxHp:10},map:[],enemies:[],items:[],depth:1,gameOver:false};
+const W=20,H=12;
+const game={
+  player:{x:1,y:1,hp:10,maxHp:10,atk:1,def:0},
+  map:[],enemies:[],items:[],depth:1,gameOver:false,bestDepth:1
+};
+
+// ===== SAVE / LOAD BEST DEPTH =====
+function loadBest() {
+  try {
+    const v = localStorage.getItem("dungeonCrawlerBestDepth");
+    return v ? parseInt(v, 10) : 1;
+  } catch(e) { return 1; }
+}
+function saveBest() {
+  try { localStorage.setItem("dungeonCrawlerBestDepth", String(game.bestDepth)); } catch(e) {}
+}
 
 // ===== PATHFINDING (BFS) =====
 function hasPath(startX, startY, endX, endY) {
@@ -121,11 +154,18 @@ function placeAtReachablePosition(char, type) {
     if (attempts > 20) return false;
   } while (!isPositionFree(x, y) || !hasPath(game.player.x, game.player.y, x, y));
 
-  game.map[y][x] = char;
-  if (type === "stairs") game.map[y][x] = "🚪";
-  else if (type === "enemy") game.enemies.push({x, y, char, hp: 3, damage: 1});
-  else if (type === "torch") game.map[y][x] = "🔥";
-  else if (type === "potion") game.items.push({x, y, char: "💊", type: "potion", value: 3});
+  if (type === "stairs") { game.map[y][x] = "🚪"; }
+  else if (type === "enemy") {
+    const isBoss = char === "👺";
+    const tier = Math.floor(game.depth / 3);
+    const hp = isBoss ? (6 + game.depth) : (3 + tier);
+    const damage = isBoss ? (2 + Math.floor(game.depth / 4)) : (1 + Math.floor(game.depth / 5));
+    game.enemies.push({x, y, char, hp, maxHp: hp, damage, isBoss});
+  }
+  else if (type === "torch") { game.map[y][x] = "🔥"; }
+  else if (type === "potion") { game.items.push({x, y, char: "💊", type: "potion", value: 3}); }
+  else if (type === "weapon") { game.items.push({x, y, char: "⚔️", type: "weapon", value: 1}); }
+  else if (type === "armor") { game.items.push({x, y, char: "🛡️", type: "armor", value: 1}); }
   return true;
 }
 
@@ -153,9 +193,12 @@ function generateDungeon() {
     if (!placeAtReachablePosition("🔥", "torch")) break;
   }
 
-  // Place enemies
-  for(let i=0;i<3;i++) {
-    const enemyTypes = ["👹", "🕷️", "🐍"];
+  // Place enemies (a boss every 5th depth, plus regulars)
+  const isBossLevel = game.depth % 5 === 0;
+  if (isBossLevel) placeAtReachablePosition("👺", "enemy");
+  const enemyCount = 2 + Math.floor(game.depth / 4);
+  const enemyTypes = ["👹", "🕷️", "🐍"];
+  for(let i=0;i<enemyCount;i++) {
     const char = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
     if (!placeAtReachablePosition(char, "enemy")) break;
   }
@@ -164,6 +207,10 @@ function generateDungeon() {
   for(let i=0;i<2;i++) {
     if (!placeAtReachablePosition("💊", "potion")) break;
   }
+
+  // Place weapon/armor occasionally
+  if (Math.random() < 0.6) placeAtReachablePosition("⚔️", "weapon");
+  if (Math.random() < 0.6) placeAtReachablePosition("🛡️", "armor");
 }
 
 // ===== RENDERING =====
@@ -179,28 +226,30 @@ function render() {
       else if(c==="🚪") cls="stairs";
       else if(c==="🔥") cls="torch";
       else if(c==="💊") cls="item";
-      else if(game.enemies.some(e=>e.x===x&&e.y===y)) {
-        const e=game.enemies.find(e=>e.x===x&&e.y===y);
-        c=e.char;
-        cls="enemy";
+      else {
+        const e = game.enemies.find(e=>e.x===x&&e.y===y);
+        if (e) { c = e.char; cls = e.isBoss ? "boss" : "enemy"; }
+        else {
+          const it = game.items.find(i=>i.x===x&&i.y===y);
+          if (it) { c = it.char; cls = "item"; }
+        }
       }
-      else if(game.items.some(i=>i.x===x&&i.y===y)) {
-        const i=game.items.find(i=>i.x===x&&i.y===y);
-        c=i.char;
-        cls="item";
-      }
-      o += `<div class="cell ${cls}">${c}</div>`;
+      o += `<div class="cell ${cls}"><span>${c}</span></div>`;
     }
   }
   document.getElementById("game").innerHTML = o;
   document.getElementById("hp").textContent = game.player.hp;
   document.getElementById("max-hp").textContent = game.player.maxHp;
   document.getElementById("depth").textContent = game.depth;
+  document.getElementById("best").textContent = game.bestDepth;
+  document.getElementById("atk").textContent = game.player.atk;
+  document.getElementById("def").textContent = game.player.def;
 }
 
 // ===== GAME LOGIC =====
 function init() {
-  game.player={x:1,y:1,hp:10,maxHp:10};game.depth=1;game.gameOver=false;
+  game.player={x:1,y:1,hp:10,maxHp:10,atk:1,def:0};
+  game.depth=1;game.gameOver=false;game.bestDepth=Math.max(loadBest(),1);
   generateDungeon();render();log("Welcome! Find 🚪 to descend.");
 }
 
@@ -225,10 +274,27 @@ function movePlayer(dx,dy) {
 
 function combat(ei) {
   const e=game.enemies[ei];
-  e.hp--;log(`Hit ${e.char} for 1 damage!`);
-  if(e.hp<=0) {game.enemies.splice(ei,1);game.map[e.y][e.x]="░";log("Killed enemy!");return;}
-  game.player.hp-=e.damage;log(`${e.char} hits you for ${e.damage} damage!`);
+  let dmg = game.player.atk;
+  const isCrit = Math.random() < 0.15;
+  if (isCrit) dmg *= 2;
+  e.hp -= dmg;
+  log(isCrit ? `Critical hit! ${e.char} takes ${dmg} damage!` : `Hit ${e.char} for ${dmg} damage!`);
+  if(e.hp<=0) {
+    game.enemies.splice(ei,1);
+    log(e.isBoss ? `Defeated the boss ${e.char}!` : "Killed enemy!");
+    render();
+    return;
+  }
+  const missed = Math.random() < 0.2;
+  if (missed) {
+    log(`${e.char} attacks but misses!`);
+  } else {
+    const taken = Math.max(1, e.damage - game.player.def);
+    game.player.hp -= taken;
+    log(`${e.char} hits you for ${taken} damage!`);
+  }
   if(game.player.hp<=0) gameOver();
+  render();
 }
 
 function pickUpItem(ii) {
@@ -236,6 +302,12 @@ function pickUpItem(ii) {
   if(i.type==="potion") {
     game.player.hp=Math.min(game.player.hp+i.value, game.player.maxHp);
     log(`Drank potion! HP +${i.value} (now ${game.player.hp}/${game.player.maxHp})`);
+  } else if(i.type==="weapon") {
+    game.player.atk += i.value;
+    log(`Found a weapon! ATK +${i.value} (now ${game.player.atk})`);
+  } else if(i.type==="armor") {
+    game.player.def += i.value;
+    log(`Found armor! DEF +${i.value} (now ${game.player.def})`);
   }
   game.items.splice(ii,1);game.map[i.y][i.x]="░";render();
 }
@@ -245,7 +317,10 @@ function enemiesTurn() {
     if(e.hp<=0) return;
     const dx=Math.abs(e.x-game.player.x),dy=Math.abs(e.y-game.player.y);
     if(dx+dy===1) { // Adjacent: attack!
-      game.player.hp-=e.damage;log(`${e.char} attacks! HP -${e.damage}`);
+      const missed = Math.random() < 0.2;
+      if (missed) { log(`${e.char} attacks but misses!`); return; }
+      const taken = Math.max(1, e.damage - game.player.def);
+      game.player.hp-=taken;log(`${e.char} attacks! HP -${taken}`);
       if(game.player.hp<=0) gameOver();
       return;
     }
@@ -254,7 +329,7 @@ function enemiesTurn() {
     if(Math.random()<0.7) {
       const nx=e.x+dirX,ny=e.y+dirY;
       if(nx>=0&&nx<W&&ny>=0&&ny<H&&game.map[ny][nx]==="░") {
-        game.map[e.y][e.x]="░";e.x=nx;e.y=ny;game.map[ny][nx]=e.char;
+        e.x=nx;e.y=ny;
       }
     }
   });
@@ -262,10 +337,18 @@ function enemiesTurn() {
 
 function nextLevel() {
   game.depth++;game.player.hp=Math.min(game.player.hp+2,game.player.maxHp);
-  log(`Depth ${game.depth}...`);generateDungeon();
+  if (game.depth > game.bestDepth) { game.bestDepth = game.depth; saveBest(); }
+  log(`Depth ${game.depth}...`);
+  if (game.depth % 5 === 0) log("You sense a powerful presence nearby...");
+  generateDungeon();render();
 }
 
-function gameOver() {game.gameOver=true;log("You died! Press Reset.");}
+function gameOver() {
+  game.gameOver=true;
+  log(`You died at depth ${game.depth}! Press Reset.`);
+  if (game.depth > game.bestDepth) { game.bestDepth = game.depth; saveBest(); }
+  render();
+}
 
 function showHelp() {document.getElementById("help").style.display="block";}
 function hideHelp() {document.getElementById("help").style.display="none";}
@@ -273,8 +356,10 @@ function restartGame() {init();hideHelp();}
 
 document.getElementById("game").addEventListener("click",(e)=> {
   if(game.gameOver) return;
-  const cw=e.target.clientWidth/W,ch=e.target.clientHeight/H;
-  const x=Math.floor(e.offsetX/cw),y=Math.floor(e.offsetY/ch);
+  const rect = document.getElementById("game").getBoundingClientRect();
+  const cw=rect.width/W,ch=rect.height/H;
+  const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+  const x=Math.floor(cx/cw),y=Math.floor(cy/ch);
   const dx=x-game.player.x,dy=y-game.player.y;
   if(Math.abs(dx)+Math.abs(dy)===1) movePlayer(dx,dy);
 });
