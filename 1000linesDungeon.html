@@ -6,7 +6,9 @@
 <style>
 *{box-sizing:border-box}
 html,body{width:100%;overflow-x:hidden}
-body{font-family:monospace;background:#000;color:#fff;margin:0;padding:10px;touch-action:manipulation}
+body{font-family:monospace;background:radial-gradient(ellipse at center,#1a1410 0%,#0a0806 100%);color:#e8c874;margin:0;padding:10px;touch-action:manipulation}
+#hud{background:linear-gradient(#3a2a1a,#241810);border:2px solid #8b6914;border-radius:6px;padding:6px 10px;margin-bottom:5px;box-shadow:0 0 10px rgba(0,0,0,.6),inset 0 0 8px rgba(139,105,20,.25)}
+#game-wrap{position:relative;width:100%}
 #game{
   display: grid;
   grid-template-columns: repeat(20, 1fr);
@@ -15,6 +17,10 @@ body{font-family:monospace;background:#000;color:#fff;margin:0;padding:10px;touc
   margin: 5px 0;
   overflow: hidden;
 }
+#dmg-layer{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;overflow:hidden}
+.float{position:absolute;font-size:4vw;font-weight:bold;animation:floatUp 1s ease-out forwards;transform:translateX(-50%)}
+@keyframes floatUp{0%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,-30px)}}
+.dmg-float{color:#f55}.heal-float{color:#5f5}.tp-float{color:#0ff}
 .cell {
   display: flex;
   justify-content: center;
@@ -27,15 +33,16 @@ body{font-family:monospace;background:#000;color:#fff;margin:0;padding:10px;touc
   line-height: 1;
 }
 .cell > span{display:inline-block;max-width:100%;overflow:hidden;text-align:center}
-#stats{margin-bottom:2px;font-size:3.6vw}
-#stats2{margin-bottom:5px;font-size:3vw;color:#aaf}
-#legend{font-size:2.8vw;margin-bottom:5px;color:#888}
-#log{height:20vw;overflow-y:auto;margin-bottom:5px;font-size:3vw;min-height:8em}
-#action-bar{display:flex;flex-direction:column;gap:1vw;padding:1vw;background:#222;position:fixed;bottom:0;left:0;right:0}
+#stats{margin-bottom:2px;font-size:3.6vw;color:#fff}
+#stats2,#stats3{margin-bottom:2px;font-size:3vw;color:#c9a35a}
+#legend{font-size:2.8vw;color:#a08050;margin-top:4px}
+#log{height:20vw;overflow-y:auto;margin-bottom:5px;font-size:3vw;min-height:8em;background:#1a0f0a;border:1px solid #5a2a1a;border-radius:4px;padding:4px;color:#ddd}
+#action-bar{display:flex;flex-direction:column;gap:1vw;padding:1vw;background:linear-gradient(#2a1a10,#1a1008);border-top:2px solid #8b6914;position:fixed;bottom:0;left:0;right:0}
 #row-1{display:flex;justify-content:center;gap:1vw}
 #row-2{display:flex;justify-content:space-between;gap:1vw}
-.action-button{flex:1;padding:2vw;background:#333;border:1px solid #444;color:#fff;cursor:pointer;font-size:4vw;min-width:12vw}
-.wall{color:#8B4513}.floor{color:#333}.player{color:#ff0}.enemy{color:#f00}.stairs{color:#0ff}
+.action-button{flex:1;padding:2vw;background:linear-gradient(#4a3520,#2a1d10);border:2px solid #8b6914;color:#e8c874;text-shadow:0 1px 2px #000;box-shadow:0 2px 4px rgba(0,0,0,.5);cursor:pointer;font-size:4vw;min-width:12vw}
+.action-button:active{background:linear-gradient(#2a1d10,#4a3520)}
+.wall{color:#8B4513}.floor{color:#333}.moss{color:#2a5}.player{color:#ff0}.enemy{color:#f00}.stairs{color:#0ff}
 .torch{color:#ff4500;animation:torchGlow 1.5s infinite}.item{color:#0f0}
 .boss{color:#f0f;animation:bossGlow 1.2s infinite}
 .dim{opacity:.35}
@@ -53,30 +60,28 @@ body{font-family:monospace;background:#000;color:#fff;margin:0;padding:10px;touc
 @media (min-width: 768px) {
   .cell { font-size: 20px; }
   #stats{font-size:16px}
-  #stats2{font-size:13px}
+  #stats2,#stats3{font-size:13px}
   #legend{font-size:12px}
   #log{height:120px;font-size:14px;min-height:8em}
   .action-button{padding:8px;font-size:16px;min-width:40px}
+  .float{font-size:16px}
 }
 </style>
 </head>
 <body>
-<div id="stats">HP: <span id="hp">10</span>/<span id="max-hp">10</span> <span id="poison-ind"></span>| Depth: <span id="depth">1</span> | Best: <span id="best">1</span></div>
-<div id="stats2">ATK: <span id="atk">1</span> | DEF: <span id="def">0</span> | Lvl: <span id="lvl">1</span> (<span id="xp">0</span>/<span id="xpneed">8</span> xp) | Kills: <span id="kills">0</span></div>
-<div id="legend">
-  <span class="player">🧙</span>You
-  <span class="enemy">🐀</span>Rat
-  <span class="enemy">👹</span>Goblin
-  <span class="enemy">🐍</span>Snake
-  <span class="enemy">🕷️</span>Spider(poison)
-  <span class="enemy">👻</span>Wraith(phase)
-  <span class="boss">👺🐉</span>Boss |
-  <span class="stairs">🚪</span>Exit
-  <span class="item">💊</span>Potion
-  <span class="item">⚔️</span>Weapon
-  <span class="item">🛡️</span>Armor
+<div id="hud">
+  <div id="stats">HP: <span id="hp">10</span>/<span id="max-hp">10</span> <span id="dot-ind"></span>| Depth: <span id="depth">1</span> | Best: <span id="best">1</span></div>
+  <div id="stats2">ATK <span id="atk">1</span> · DEF <span id="def">0</span> · CRIT <span id="crit">15</span>% · DODGE <span id="dodge">20</span>% · SPD <span id="spd">0</span>% <span id="key-ind"></span></div>
+  <div id="stats3">Lvl <span id="lvl">1</span> (<span id="xp">0</span>/<span id="xpneed">8</span> xp) · Kills <span id="kills">0</span></div>
+  <div id="legend">
+    <span class="player">🧙</span>You <span class="enemy">🐀🦇🐍🕷️👹👻🧟</span>Enemies <span class="boss">👺🐉💀</span>Boss
+    <span class="stairs">🚪</span>Exit <span class="item">💊⚔️🛡️📦🔑🔘🌀</span>Items — see ? for details
+  </div>
 </div>
-<div id="game"></div>
+<div id="game-wrap">
+  <div id="game"></div>
+  <div id="dmg-layer"></div>
+</div>
 <div id="log"></div>
 <div id="action-bar">
   <div id="row-1">
@@ -89,25 +94,34 @@ body{font-family:monospace;background:#000;color:#fff;margin:0;padding:10px;touc
       <button class="action-button" onclick="movePlayer(1,0)">→</button>
     </div>
     <div>
+      <button class="action-button" onclick="toggleMute()" id="mute-btn">🔊</button>
       <button class="action-button" onclick="showHelp()">?</button>
       <button class="action-button" onclick="restartGame()">Reset</button>
     </div>
   </div>
 </div>
 
-<div id="help" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#222;border:2px solid #444;padding:20px;z-index:100;max-width:90vw;max-height:80vh;overflow-y:auto;">
-  <p style="font-size:3.6vw;line-height:1.5;">
-  ↑↓←→: Move | ?: Help | Reset: Restart (always fresh)<br>
-  Enemies attack if adjacent!<br>
-  💊 +3 HP | ⚔️ +ATK | 🛡️ +DEF (gear rolls Common/<span class="tier-rare">Rare</span>/<span class="tier-epic">Epic</span>, better odds deeper)<br>
-  🕷️ Spiders poison you (HP drain over turns)<br>
-  👻 Wraiths can phase through walls<br>
-  👺🐉 Bosses appear every 5 depths — Dragons (stronger, can double-strike) replace Ogres from depth 10<br>
-  Fog of war: only nearby tiles are lit; explored floors stay dimly visible but monsters/items hide once you leave<br>
-  Kill enemies for XP — leveling up restores & raises max HP, and boosts ATK every 3 levels<br>
-  Your run autosaves — reloading the page offers to continue<br>
+<div id="help" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#241810;border:2px solid #8b6914;padding:20px;z-index:100;max-width:90vw;max-height:80vh;overflow-y:auto;color:#e8c874;">
+  <p style="font-size:3.6vw;line-height:1.6;">
+  ↑↓←→ Move | 🔊 Mute | ? Help | Reset: fresh start<br>
+  💊+HP ⚔️+ATK 🛡️+DEF — <span class="tier-rare">Rare</span>/<span class="tier-epic">Epic</span> gear also rolls bonus CRIT/DODGE/SPD<br>
+  🐍🕷️💀 inflict lingering damage-over-time effects<br>
+  👻 Wraiths phase through walls · 🐉💀 bosses can strike twice<br>
+  📦 Chests need a 🔑 key found on the same floor<br>
+  🌀 Portals teleport you to their linked pair<br>
+  🔘 Buttons open hidden passages somewhere on the floor<br>
+  Some floor tiles hide traps — watch your HP<br>
+  Fog of war: only nearby tiles are lit; explored floors stay dim, monsters/items only show up close<br>
+  Kills grant XP — leveling restores &amp; raises max HP, +ATK every 3 levels<br>
+  Your run autosaves — reloading offers to continue<br>
   </p>
-  <div style="text-align:center;margin-top:10px;padding:5px;background:#444;cursor:pointer;font-size:4vw;" onclick="hideHelp()">Close</div>
+  <div style="text-align:center;margin-top:10px;padding:5px;background:#4a3520;border:1px solid #8b6914;cursor:pointer;font-size:4vw;" onclick="hideHelp()">Close</div>
+</div>
+
+<div id="recap" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#241810;border:2px solid #8b6914;padding:20px;z-index:101;max-width:85vw;text-align:center;">
+  <h3 style="margin:0 0 10px;color:#e8c874;">💀 You Died</h3>
+  <div id="recap-body" style="font-size:4vw;line-height:1.7;color:#e8c874;"></div>
+  <div style="margin-top:14px;padding:8px;background:#4a3520;border:1px solid #8b6914;cursor:pointer;font-size:4vw;color:#e8c874;" onclick="restartGame()">Try Again</div>
 </div>
 
 <script>
@@ -115,26 +129,53 @@ body{font-family:monospace;background:#000;color:#fff;margin:0;padding:10px;touc
 const W=20,H=12,VR=3;
 const ENEMY_DEFS = {
   "🐀":{name:"Rat",minDepth:1,hpBase:2,dmgBase:1},
-  "👹":{name:"Goblin",minDepth:1,hpBase:3,dmgBase:1},
-  "🐍":{name:"Snake",minDepth:1,hpBase:3,dmgBase:1,fast:true},
-  "🕷️":{name:"Spider",minDepth:2,hpBase:3,dmgBase:1,poison:true},
-  "👻":{name:"Wraith",minDepth:8,hpBase:5,dmgBase:2,phase:true},
+  "🦇":{name:"Bat",minDepth:1,hpBase:2,dmgBase:1,fast:true},
+  "🐍":{name:"Snake",minDepth:3,hpBase:3,dmgBase:1,dot:{label:"Venom"}},
+  "🕷️":{name:"Spider",minDepth:6,hpBase:4,dmgBase:1,dot:{label:"Poison"}},
+  "👹":{name:"Goblin",minDepth:9,hpBase:5,dmgBase:2},
+  "👻":{name:"Wraith",minDepth:12,hpBase:6,dmgBase:2,phase:true},
+  "🧟":{name:"Zombie",minDepth:15,hpBase:9,dmgBase:2},
 };
 const BOSS_DEFS = {
   "👺":{name:"Ogre",minDepth:1,hpBase:8,dmgBase:2},
   "🐉":{name:"Dragon",minDepth:10,hpBase:14,dmgBase:3,doubleAttack:true},
+  "💀":{name:"Lich",minDepth:20,hpBase:20,dmgBase:4,doubleAttack:true,dot:{label:"Curse"}},
 };
 
 // ===== GAME STATE =====
-const game={player:null,map:[],seen:[],enemies:[],items:[],depth:1,gameOver:false,bestDepth:1,kills:0};
-function freshPlayer(){return {x:1,y:1,hp:10,maxHp:10,atk:1,def:0,xp:0,level:1,poison:0};}
+const game={player:null,map:[],seen:[],enemies:[],items:[],traps:[],depth:1,gameOver:false,
+  bestDepth:1,kills:0,secretDoor:null,secretRoom:null,muted:false,startTime:0};
+function freshPlayer(){return {x:1,y:1,hp:10,maxHp:10,atk:1,def:0,crit:0.15,dodge:0.2,spd:0,
+  xp:0,level:1,dot:null,hasKey:false};}
 
-// ===== PERSISTENCE (best depth + autosave run) =====
+// ===== PERSISTENCE =====
 function loadBest(){try{const v=localStorage.getItem("dungeonCrawlerBestDepth");return v?parseInt(v,10):1;}catch(e){return 1;}}
 function saveBest(){try{localStorage.setItem("dungeonCrawlerBestDepth",String(game.bestDepth));}catch(e){}}
 function loadRun(){try{const v=localStorage.getItem("dungeonCrawlerRun");return v?JSON.parse(v):null;}catch(e){return null;}}
 function saveRun(){try{localStorage.setItem("dungeonCrawlerRun",JSON.stringify({depth:game.depth,kills:game.kills,player:game.player}));}catch(e){}}
 function clearRun(){try{localStorage.removeItem("dungeonCrawlerRun");}catch(e){}}
+function loadMuted(){try{return localStorage.getItem("dungeonCrawlerMuted")==="1";}catch(e){return false;}}
+function saveMuted(){try{localStorage.setItem("dungeonCrawlerMuted",game.muted?"1":"0");}catch(e){}}
+
+// ===== AUDIO (synth beeps, no assets) =====
+let actx=null;
+function beep(freq,dur,type){
+  if(game.muted) return;
+  try{
+    actx = actx || new (window.AudioContext||window.webkitAudioContext)();
+    const o=actx.createOscillator(), g=actx.createGain();
+    o.type = type||'sine'; o.frequency.value=freq;
+    o.connect(g); g.connect(actx.destination);
+    g.gain.setValueAtTime(0.15, actx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime+dur);
+    o.start(); o.stop(actx.currentTime+dur);
+  }catch(e){}
+}
+function toggleMute(){
+  game.muted=!game.muted;
+  document.getElementById("mute-btn").textContent = game.muted?"🔇":"🔊";
+  saveMuted();
+}
 
 // ===== PATHFINDING (BFS) =====
 function hasPath(startX, startY, endX, endY) {
@@ -146,7 +187,7 @@ function hasPath(startX, startY, endX, endY) {
     if (x === endX && y === endY) return true;
     const neighbors = [{x:x+1,y:y},{x:x-1,y:y},{x:x,y:y+1},{x:x,y:y-1}];
     for (const n of neighbors) {
-      if (n.x >= 0 && n.x < W && n.y >= 0 && n.y < H && !visited[n.y][n.x] && game.map[n.y][n.x] !== "🟫") {
+      if (n.x >= 0 && n.x < W && n.y >= 0 && n.y < H && !visited[n.y][n.x] && game.map[n.y][n.x] !== "🟫" && game.map[n.y][n.x] !== "🔒") {
         visited[n.y][n.x] = true;
         queue.push({x: n.x, y: n.y});
       }
@@ -159,25 +200,49 @@ function hasPath(startX, startY, endX, endY) {
 function isPositionFree(x, y) {
   if (x < 0 || x >= W || y < 0 || y >= H || game.map[y][x] !== "░") return false;
   if (Math.abs(x - game.player.x) + Math.abs(y - game.player.y) < 2) return false;
-  if (game.enemies.some(e => e.x === x && e.y === y) || game.items.some(i => i.x === x && i.y === y)) return false;
+  if (game.enemies.some(e => e.x === x && e.y === y) || game.items.some(i => i.x === x && i.y === y) ||
+      game.traps.some(t => t.x === x && t.y === y)) return false;
   return true;
 }
 
 // ===== ITEM RARITY =====
-function rollRarity(){
-  const r = Math.random() + game.depth*0.03;
-  if(r>1.3) return {tier:"Epic",val:3};
-  if(r>0.9) return {tier:"Rare",val:2};
-  return {tier:"Common",val:1};
+function rollItem(bonus){
+  const r = Math.random() + game.depth*0.03 + (bonus||0);
+  if(r>1.3) return {tier:"Epic",value:3,extra:rollExtra(0.10)};
+  if(r>0.9) return {tier:"Rare",value:2,extra:rollExtra(0.05)};
+  return {tier:"Common",value:1,extra:null};
+}
+function rollExtra(amt){
+  const stats=["crit","dodge","spd"];
+  return {stat:stats[Math.floor(Math.random()*stats.length)], amount:amt};
 }
 
-// ===== ENEMY SELECTION =====
+// ===== ENEMY HELPERS =====
 function pickFrom(defs){
   const pool = Object.entries(defs).filter(([,d])=>d.minDepth<=game.depth);
-  return pool[Math.floor(Math.random()*pool.length)];
+  const weights = pool.map(([,d])=>Math.min(game.depth-d.minDepth+1,6));
+  const total = weights.reduce((a,b)=>a+b,0);
+  let r = Math.random()*total;
+  for(let i=0;i<pool.length;i++){ r-=weights[i]; if(r<=0) return pool[i]; }
+  return pool[pool.length-1];
+}
+function makeEnemy(x,y,char,def){
+  const hp=def.hpBase+Math.floor(game.depth/3);
+  return {x,y,char,hp,maxHp:hp,damage:def.dmgBase+Math.floor(game.depth/6),name:def.name,
+    isBoss:!!def.isBoss,fast:!!def.fast,phase:!!def.phase,doubleAttack:!!def.doubleAttack,
+    dot: def.dot ? {...def.dot} : null};
+}
+function placeNear(ax,ay,char,def){
+  for(let a=0;a<10;a++){
+    const x=ax+Math.floor(Math.random()*5)-2, y=ay+Math.floor(Math.random()*5)-2;
+    if(x<0||x>=W||y<0||y>=H||!isPositionFree(x,y)||!hasPath(game.player.x,game.player.y,x,y)) continue;
+    game.enemies.push(makeEnemy(x,y,char,def));
+    return true;
+  }
+  return false;
 }
 
-// ===== PLACEMENT WITH CHECKS =====
+// ===== PLACEMENT =====
 function placeAtReachablePosition(char, type, extra) {
   let x, y, attempts = 0;
   do {
@@ -187,27 +252,45 @@ function placeAtReachablePosition(char, type, extra) {
     if (attempts > 20) return false;
   } while (!isPositionFree(x, y) || !hasPath(game.player.x, game.player.y, x, y));
 
-  if (type === "stairs") { game.map[y][x] = "🚪"; }
-  else if (type === "torch") { game.map[y][x] = "🔥"; }
-  else if (type === "enemy") {
-    const d = extra;
-    const hp = d.hpBase + Math.floor(game.depth/3);
-    game.enemies.push({x,y,char,hp,maxHp:hp,damage:d.dmgBase+Math.floor(game.depth/6),
-      name:d.name,isBoss:!!d.isBoss,fast:!!d.fast,poison:!!d.poison,phase:!!d.phase,doubleAttack:!!d.doubleAttack});
-  }
-  else if (type === "potion") { game.items.push({x,y,char:"💊",type:"potion",value:3}); }
+  if (type === "stairs") game.map[y][x] = "🚪";
+  else if (type === "torch") game.map[y][x] = "🔥";
+  else if (type === "trap") game.traps.push({x,y,dmg:1+Math.floor(game.depth/5)});
+  else if (type === "enemy") game.enemies.push(makeEnemy(x,y,char,extra));
+  else if (type === "potion") game.items.push({x,y,char:"💊",type:"potion",value:3});
   else if (type === "weapon" || type === "armor") {
-    const r = rollRarity();
-    game.items.push({x,y,char,type,value:r.val,tier:r.tier});
+    const r = rollItem();
+    game.items.push({x,y,char,type,value:r.value,tier:r.tier,extra:r.extra});
   }
+  else if (type === "key") game.items.push({x,y,char:"🔑",type:"key"});
+  else if (type === "chest") game.items.push({x,y,char:"📦",type:"chest"});
+  else if (type === "button") game.items.push({x,y,char:"🔘",type:"button"});
+  else if (type === "portal") game.items.push({x,y,char:"🌀",type:"portal"});
   return true;
+}
+
+function placeSecretRoom(){
+  if(Math.random()>=0.45) return;
+  for(let tries=0; tries<25; tries++){
+    const fx=Math.floor(Math.random()*W), fy=Math.floor(Math.random()*H);
+    if(game.map[fy][fx]!=="░") continue;
+    const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+    const [ddx,ddy]=dirs[Math.floor(Math.random()*4)];
+    const doorX=fx+ddx, doorY=fy+ddy, roomX=fx+2*ddx, roomY=fy+2*ddy;
+    if(roomX<1||roomX>=W-1||roomY<1||roomY>=H-1) continue;
+    if(game.map[doorY][doorX]!=="🟫" || game.map[roomY][roomX]!=="🟫") continue;
+    game.map[roomY][roomX]="🔒";
+    game.secretDoor={x:doorX,y:doorY};
+    game.secretRoom={x:roomX,y:roomY};
+    placeAtReachablePosition("🔘","button");
+    return;
+  }
 }
 
 // ===== DUNGEON GENERATION =====
 function generateDungeon() {
   game.map=Array(H).fill().map(()=>Array(W).fill("🟫"));
   game.seen=Array(H).fill().map(()=>Array(W).fill(false));
-  game.enemies=[];game.items=[];
+  game.enemies=[];game.items=[];game.traps=[];game.secretDoor=null;game.secretRoom=null;
 
   for(let i=0;i<6;i++) {
     const w=3+Math.floor(Math.random()*5),h=3+Math.floor(Math.random()*4);
@@ -226,15 +309,50 @@ function generateDungeon() {
     const [char,def] = pickFrom(BOSS_DEFS);
     placeAtReachablePosition(char, "enemy", {...def, isBoss:true});
   }
+
   const enemyCount = 2 + Math.floor(game.depth/4);
-  for(let i=0;i<enemyCount;i++) {
+  let spawned = 0;
+  while (spawned < enemyCount) {
     const [char,def] = pickFrom(ENEMY_DEFS);
-    if (!placeAtReachablePosition(char, "enemy", def)) break;
+    if (Math.random() < 0.3 && enemyCount-spawned >= 2) {
+      const packSize = Math.min(2+Math.floor(Math.random()*2), enemyCount-spawned);
+      if (!placeAtReachablePosition(char,"enemy",def)) break;
+      spawned++;
+      const anchor = game.enemies[game.enemies.length-1];
+      for (let p=1; p<packSize; p++) { if (!placeNear(anchor.x,anchor.y,char,def)) break; spawned++; }
+    } else {
+      if (!placeAtReachablePosition(char,"enemy",def)) break;
+      spawned++;
+    }
   }
 
   for(let i=0;i<2;i++) if (!placeAtReachablePosition("💊", "potion")) break;
   if (Math.random() < 0.6) placeAtReachablePosition("⚔️", "weapon");
   if (Math.random() < 0.6) placeAtReachablePosition("🛡️", "armor");
+  if (game.depth >= 2 && Math.random() < 0.4) {
+    if (placeAtReachablePosition("📦","chest")) placeAtReachablePosition("🔑","key");
+  }
+  for(let i=0;i<1+Math.floor(game.depth/6);i++) placeAtReachablePosition(null,"trap");
+  if (Math.random() < 0.4) {
+    if (placeAtReachablePosition("🌀","portal")) {
+      if (!placeAtReachablePosition("🌀","portal")) game.items.pop();
+    }
+  }
+  placeSecretRoom();
+}
+
+// ===== FLOATING DAMAGE NUMBERS =====
+function showFloat(x,y,text,cls){
+  const rect = document.getElementById("game").getBoundingClientRect();
+  if(!rect.width) return;
+  const cw=rect.width/W, ch=rect.height/H;
+  const el=document.createElement("div");
+  el.className="float "+cls;
+  el.textContent=text;
+  el.style.left=(x*cw+cw/2)+"px";
+  el.style.top=(y*ch)+"px";
+  document.getElementById("dmg-layer").appendChild(el);
+  setTimeout(()=>el.remove(), 1000);
 }
 
 // ===== RENDERING =====
@@ -251,12 +369,11 @@ function render() {
       const it = (visible && !e) ? game.items.find(i=>i.x===x&&i.y===y) : null;
       if (e) { c=e.char; cls += (e.isBoss?" boss":" enemy"); }
       else if (it) { c=it.char; cls += " item" + (it.tier ? " tier-"+it.tier.toLowerCase() : ""); }
-      else if(c==="🟫") cls+=" wall";
-      else if(c==="░") cls+=" floor";
-      else if(x===game.player.x && y===game.player.y) cls+=" player";
+      else if (x===game.player.x && y===game.player.y) { c="🧙"; cls += " player"; }
+      else if(c==="🟫"||c==="🔒") cls+=" wall";
       else if(c==="🚪") cls+=" stairs";
       else if(c==="🔥") cls+=" torch";
-      if(x===game.player.x && y===game.player.y && !e) c="🧙";
+      else if(c==="░") { cls+=" floor"; if((x*31+y*17+game.depth*13)%11===0) cls+=" moss"; }
       o += `<div class="cell ${cls}"><span>${c}</span></div>`;
     }
   }
@@ -267,11 +384,15 @@ function render() {
   document.getElementById("best").textContent = game.bestDepth;
   document.getElementById("atk").textContent = game.player.atk;
   document.getElementById("def").textContent = game.player.def;
+  document.getElementById("crit").textContent = Math.round(game.player.crit*100);
+  document.getElementById("dodge").textContent = Math.round(game.player.dodge*100);
+  document.getElementById("spd").textContent = Math.round(game.player.spd*100);
+  document.getElementById("key-ind").textContent = game.player.hasKey ? "🔑" : "";
   document.getElementById("lvl").textContent = game.player.level;
   document.getElementById("xp").textContent = game.player.xp;
   document.getElementById("xpneed").textContent = game.player.level*8;
   document.getElementById("kills").textContent = game.kills;
-  document.getElementById("poison-ind").textContent = game.player.poison>0 ? `☠️${game.player.poison} ` : "";
+  document.getElementById("dot-ind").textContent = game.player.dot ? `${game.player.dot.label}(${game.player.dot.turns}) ` : "";
   if(!game.gameOver) saveRun();
 }
 
@@ -286,16 +407,20 @@ function gainXp(n){
     game.player.hp=game.player.maxHp;
     if(game.player.level%3===0) game.player.atk++;
     log(`Level up! Now level ${game.player.level}.`);
+    beep(660,.2);
     need = game.player.level*8;
   }
 }
 
 // ===== STATUS EFFECTS =====
 function tickStatus(){
-  if(game.player.poison>0){
+  if(game.player.dot && game.player.dot.turns>0){
     game.player.hp -= 1;
-    game.player.poison--;
-    log(`Poison courses through you! HP -1 (${game.player.poison} left)`);
+    game.player.dot.turns--;
+    log(`${game.player.dot.label} hurts! HP -1 (${game.player.dot.turns} left)`);
+    showFloat(game.player.x,game.player.y,"-1","dmg-float");
+    beep(180,.1,'square');
+    if(game.player.dot.turns<=0) game.player.dot=null;
     if(game.player.hp<=0) gameOver();
   }
 }
@@ -304,46 +429,91 @@ function tickStatus(){
 function log(msg) {const l=document.getElementById("log");l.innerHTML+=msg+"<br>";l.scrollTop=l.scrollHeight;}
 
 // ===== COMBAT =====
-function enemyAttack(e){
-  if(Math.random()<0.2){ log(`${e.name} attacks but misses!`); return; }
-  const taken = Math.max(1, e.damage - game.player.def);
-  game.player.hp -= taken;
-  log(`${e.name} attacks! HP -${taken}`);
-  if(e.poison){ game.player.poison = 3; log("You've been poisoned!"); }
-  if(game.player.hp<=0) gameOver();
-}
-
-function combat(ei) {
-  const e=game.enemies[ei];
+function playerHit(e){
   let dmg = game.player.atk;
-  const isCrit = Math.random() < 0.15;
+  const isCrit = Math.random() < game.player.crit;
   if (isCrit) dmg *= 2;
   e.hp -= dmg;
+  showFloat(e.x,e.y,`-${dmg}`,"dmg-float");
   log(isCrit ? `Critical hit! ${e.name} takes ${dmg} damage!` : `Hit ${e.name} for ${dmg} damage!`);
+  beep(isCrit?520:350,.08);
   if(e.hp<=0) {
-    game.enemies.splice(ei,1);
+    game.enemies.splice(game.enemies.indexOf(e),1);
     game.kills++;
     gainXp((e.isBoss?8:2)+Math.floor(game.depth/3));
     log(`Defeated ${e.name}!`);
-    return;
+    beep(600,.15);
+    return false;
+  }
+  return true;
+}
+function enemyAttack(e){
+  if(Math.random()<game.player.dodge){ log(`${e.name} attacks — you dodge!`); beep(300,.06); return; }
+  const taken = Math.max(1, e.damage - game.player.def);
+  game.player.hp -= taken;
+  log(`${e.name} attacks! HP -${taken}`);
+  showFloat(game.player.x,game.player.y,`-${taken}`,"dmg-float");
+  beep(220,.1,'square');
+  if(e.dot){ game.player.dot={turns:3,label:e.dot.label}; log(`You are afflicted with ${e.dot.label}!`); }
+  if(game.player.hp<=0) gameOver();
+}
+function combat(ei) {
+  const e=game.enemies[ei];
+  if(!playerHit(e)) return;
+  if(Math.random()<game.player.spd){
+    log("Swift strike!");
+    if(!playerHit(e)) return;
   }
   enemyAttack(e);
   if(e.doubleAttack && !game.gameOver && Math.random()<0.5) enemyAttack(e);
 }
 
-function pickUpItem(ii) {
-  const i=game.items[ii];
-  if(i.type==="potion") {
-    game.player.hp=Math.min(game.player.hp+i.value, game.player.maxHp);
-    log(`Drank potion! HP +${i.value} (now ${game.player.hp}/${game.player.maxHp})`);
-  } else if(i.type==="weapon") {
-    game.player.atk += i.value;
-    log(`Found a ${i.tier} weapon! ATK +${i.value} (now ${game.player.atk})`);
-  } else if(i.type==="armor") {
-    game.player.def += i.value;
-    log(`Found ${i.tier} armor! DEF +${i.value} (now ${game.player.def})`);
+function pickUpItem(item) {
+  if(item.type==="potion") {
+    game.player.hp=Math.min(game.player.hp+item.value, game.player.maxHp);
+    log(`Drank potion! HP +${item.value} (now ${game.player.hp}/${game.player.maxHp})`);
+    showFloat(game.player.x,game.player.y,`+${item.value}`,"heal-float");
+    beep(700,.08);
+  } else if(item.type==="weapon" || item.type==="armor") {
+    const stat = item.type==="weapon" ? "atk" : "def";
+    game.player[stat] += item.value;
+    let msg = `Found a ${item.tier} ${item.type}! ${stat.toUpperCase()} +${item.value}`;
+    if(item.extra){ game.player[item.extra.stat] += item.extra.amount; msg += `, ${item.extra.stat.toUpperCase()} +${Math.round(item.extra.amount*100)}%`; }
+    log(msg);
+    beep(760,.1);
+  } else if(item.type==="key") {
+    game.player.hasKey = true;
+    log("Picked up a key 🔑");
+    beep(820,.1);
   }
-  game.items.splice(ii,1);
+  game.items.splice(game.items.indexOf(item),1);
+}
+function openChest(item){
+  game.player.hasKey = false;
+  const loot = rollItem(0.5);
+  const stat = Math.random()<0.5 ? "atk" : "def";
+  game.player[stat] += loot.value;
+  let msg = `Chest opened! ${loot.tier} loot: ${stat.toUpperCase()} +${loot.value}`;
+  if(loot.extra){ game.player[loot.extra.stat] += loot.extra.amount; msg += `, ${loot.extra.stat.toUpperCase()} +${Math.round(loot.extra.amount*100)}%`; }
+  log(msg);
+  beep(900,.2);
+  showFloat(item.x,item.y,"🎁","heal-float");
+  game.items.splice(game.items.indexOf(item),1);
+}
+function pressButton(item){
+  if(game.secretDoor){
+    game.map[game.secretDoor.y][game.secretDoor.x] = "░";
+    if(game.secretRoom){
+      game.map[game.secretRoom.y][game.secretRoom.x] = "░";
+      const loot = rollItem(0.5);
+      game.items.push({x:game.secretRoom.x,y:game.secretRoom.y,char:"⭐",
+        type:(Math.random()<0.5?"weapon":"armor"),value:loot.value,tier:loot.tier,extra:loot.extra});
+    }
+    log("A hidden passage grinds open somewhere nearby...");
+    beep(200,.3,'square');
+    game.secretDoor=null;
+  }
+  game.items.splice(game.items.indexOf(item),1);
 }
 
 function enemiesTurn() {
@@ -375,17 +545,42 @@ function movePlayer(dx,dy) {
   const nx=game.player.x+dx, ny=game.player.y+dy;
   if(nx<0||nx>=W||ny<0||ny>=H) { log("Can't move there!"); return; }
   const ei=game.enemies.findIndex(e=>e.x===nx&&e.y===ny);
-  if(ei===-1 && game.map[ny][nx]==="🟫") { log("Can't move there!"); return; }
+  if(ei===-1 && (game.map[ny][nx]==="🟫" || game.map[ny][nx]==="🔒")) { log("Can't move there!"); return; }
 
   tickStatus();
   if(game.gameOver) { render(); return; }
 
   if(ei!==-1) { combat(ei); render(); return; }
-  const ii=game.items.findIndex(i=>i.x===nx&&i.y===ny);
-  if(ii!==-1) { pickUpItem(ii); render(); return; }
+
+  const item = game.items.find(i=>i.x===nx&&i.y===ny);
+  if(item){
+    if(item.type==="chest"){
+      if(!game.player.hasKey){ log("🔒 Locked. You need a key."); render(); return; }
+      openChest(item); render(); return;
+    }
+    if(item.type==="button"){ pressButton(item); render(); return; }
+    if(item.type!=="portal"){ pickUpItem(item); render(); return; }
+  }
+
   if(game.map[ny][nx]==="🚪") { nextLevel(); return; }
 
   game.player.x=nx; game.player.y=ny;
+
+  const trapIdx = game.traps.findIndex(t=>t.x===nx&&t.y===ny);
+  if(trapIdx!==-1){
+    const trap = game.traps[trapIdx];
+    game.player.hp -= trap.dmg;
+    log(`💥 You triggered a trap! HP -${trap.dmg}`);
+    showFloat(nx,ny,`-${trap.dmg}`,"dmg-float");
+    beep(150,.15,'square');
+    game.traps.splice(trapIdx,1);
+    if(game.player.hp<=0){ gameOver(); return; }
+  }
+  const portal = game.items.find(i=>i.type==="portal" && i.x===game.player.x && i.y===game.player.y);
+  if(portal){
+    const other = game.items.find(i=>i.type==="portal" && i!==portal);
+    if(other){ game.player.x=other.x; game.player.y=other.y; log("Whoosh — teleported!"); beep(500,.15); showFloat(game.player.x,game.player.y,"⚡","tp-float"); }
+  }
   enemiesTurn();
   render();
 }
@@ -395,6 +590,7 @@ function nextLevel() {
   game.player.hp=Math.min(game.player.hp+2,game.player.maxHp);
   if (game.depth > game.bestDepth) { game.bestDepth = game.depth; saveBest(); }
   log(`Depth ${game.depth}...`);
+  beep(330,.2);
   if (game.depth % 5 === 0) log("You sense a powerful presence nearby...");
   generateDungeon();
   render();
@@ -402,15 +598,22 @@ function nextLevel() {
 
 function gameOver() {
   game.gameOver=true;
+  const elapsed = Math.round((Date.now()-game.startTime)/1000);
   log(`You died at depth ${game.depth}! Press Reset.`);
   if (game.depth > game.bestDepth) { game.bestDepth = game.depth; saveBest(); }
   clearRun();
+  beep(90,.6,'sawtooth');
+  document.getElementById("recap-body").innerHTML =
+    `Depth reached: <b>${game.depth}</b><br>Level: <b>${game.player.level}</b><br>Kills: <b>${game.kills}</b><br>Survived: <b>${elapsed}s</b><br>Best depth ever: <b>${game.bestDepth}</b>`;
+  document.getElementById("recap").style.display="block";
   render();
 }
 
 // ===== BOOT / RESTART =====
 function boot(){
   game.bestDepth=Math.max(loadBest(),1);
+  game.muted=loadMuted();
+  document.getElementById("mute-btn").textContent = game.muted?"🔇":"🔊";
   const saved=loadRun();
   if(saved && saved.player && saved.player.hp>0 && confirm(`Continue your run at depth ${saved.depth}?`)){
     game.player=Object.assign(freshPlayer(),saved.player);
@@ -422,6 +625,7 @@ function boot(){
     game.kills=0;
   }
   game.gameOver=false;
+  game.startTime=Date.now();
   generateDungeon();
   render();
   log(saved ? "Welcome back, adventurer!" : "Welcome! Find 🚪 to descend.");
@@ -432,10 +636,12 @@ function restartGame(){
   game.depth=1;
   game.kills=0;
   game.gameOver=false;
+  game.startTime=Date.now();
   generateDungeon();
   render();
   log("Welcome! Find 🚪 to descend.");
   hideHelp();
+  document.getElementById("recap").style.display="none";
 }
 
 function showHelp() {document.getElementById("help").style.display="block";}
