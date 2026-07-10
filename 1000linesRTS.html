@@ -8,20 +8,23 @@ body{font-family:monospace;background:#000;color:#fff;margin:0;padding:0;height:
 #game-container{flex:1;position:relative;overflow:hidden}
 #game{position:absolute;display:grid;grid-template-columns:repeat(40,1fr);gap:0;font-size:12px;line-height:1;transform-origin:0 0;touch-action:none}
 .cell{aspect-ratio:1/1;display:flex;justify-content:center;align-items:center;position:relative}
-.unit-count{position:absolute;bottom:-5px;right:-5px;font-size:8px;color:#fff;text-shadow:0 0 2px #000;background:rgba(0,0,0,0.5);border-radius:50%;width:14px;height:14px;display:flex;justify-content:center;align-items:center}
-#ui{background:#222;padding:10px;border-top:1px solid #444;display:flex;flex-direction:column;gap:10px}
-#stats{display:flex;justify-content:space-between;font-size:14px;margin-bottom:10px}
-#staging{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px}
+.unit-count{position:absolute;bottom:-5px;right:-5px;font-size:8px;color:#fff;text-shadow:0 0 2px #000;background:rgba(0,0,0,0.6);border-radius:50%;width:14px;height:14px;display:flex;justify-content:center;align-items:center}
+#ui{background:#222;padding:8px 10px;border-top:1px solid #444;display:flex;flex-direction:column;gap:8px;max-height:42vh;overflow-y:auto}
+#stats{display:flex;justify-content:space-between;font-size:13px;flex-wrap:wrap;gap:6px}
+#worker-panel{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;align-items:center;background:#1a1a1a;padding:4px 6px;border-radius:4px}
+#staging{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:#1a1a1a;padding:4px 6px;border-radius:4px}
 #controls{display:flex;gap:5px;flex-wrap:wrap}
-.button{background:#333;border:1px solid #444;color:#fff;padding:5px 10px;cursor:pointer;border-radius:3px;font-size:12px}
-.button:disabled{opacity:0.5;cursor:not-allowed}
+.section-label{font-size:10px;color:#888;text-transform:uppercase;margin-top:2px}
+.button{background:#333;border:1px solid #444;color:#fff;padding:5px 9px;cursor:pointer;border-radius:3px;font-size:12px}
+.button:disabled{opacity:0.4;cursor:not-allowed}
 .zoom-button{padding:8px;font-size:16px}
 #zoom-in,#zoom-out{position:fixed;bottom:10px;right:10px;z-index:100}
 #zoom-in{top:auto;bottom:60px}
-.wall{color:#888}.player{color:#4af}.enemy{color:#f44}.building{color:#ff0}.unit{color:#fff}
+.building.player{color:#4af}.building.enemy{color:#f66}
+.unit.player{color:#8cf}.unit.enemy{color:#f88}
 @media (max-width:768px){
   #game{font-size:8px}
-  .button{padding:4px 8px;font-size:10px}
+  .button{padding:4px 7px;font-size:10px}
   .unit-count{font-size:6px;width:10px;height:10px}
 }
 </style>
@@ -33,31 +36,47 @@ body{font-family:monospace;background:#000;color:#fff;margin:0;padding:0;height:
 <div id="ui">
   <div id="stats">
     <div>
-      <span>🍎: <span id="player-food">100</span></span>
-      <span>🪵: <span id="player-wood">100</span></span>
-      <span>🟡: <span id="player-gold">100</span></span>
-      <span>👥: <span id="player-pop">0/10</span></span>
+      <b>You</b>
+      🍎<span id="player-food">0</span>
+      🪵<span id="player-wood">0</span>
+      🟡<span id="player-gold">0</span>
+      👥<span id="player-pop">0/10</span>
     </div>
     <div>
-      <span>🍎: <span id="enemy-food">100</span></span>
-      <span>🪵: <span id="enemy-wood">100</span></span>
-      <span>🟡: <span id="enemy-gold">100</span></span>
+      <b>Enemy</b>
+      🍎<span id="enemy-food">0</span>
+      🪵<span id="enemy-wood">0</span>
+      🟡<span id="enemy-gold">0</span>
     </div>
   </div>
+
+  <div class="section-label">Workers</div>
+  <div id="worker-panel"></div>
+
+  <div class="section-label">Staging (max 10/squad, auto-deploys at cap)</div>
   <div id="staging">
-    <div id="staging-units"></div>
+    <div id="staging-units" style="display:flex;gap:10px;flex-wrap:wrap"></div>
     <button class="button" onclick="deployAll()">Deploy All</button>
   </div>
+
+  <div class="section-label">Economy</div>
   <div id="controls">
-    <button class="button" onclick="build('casern')">Build Casern (🪵50 🟡30)</button>
-    <button class="button" onclick="build('mageTower')">Build Mage Tower (🪵40 🟡60)</button>
-    <button class="button" onclick="build('castle')">Build Castle (🪵80 🟡100)</button>
-    <button class="button" onclick="build('walls')">Build Walls (🪵20 🟡10)</button>
-    <button class="button" onclick="build('house')">Build House (🪵30 🟡20)</button>
-    <button class="button" onclick="produce('worker')">Train Worker (🍎10)</button>
-    <button class="button" onclick="produce('soldier')">Train Soldier (🍎20 🟡10)</button>
-    <button class="button" onclick="produce('mage')">Train Mage (🍎15 🟡20)</button>
-    <button class="button" onclick="produce('catapult')">Train Catapult (🪵40 🟡30)</button>
+    <button class="button" id="train-worker" onclick="trainWorker()">Train Worker (🍎10)</button>
+    <button class="button" id="build-house" onclick="build('house')">Build House (🪵30 🟡20, +5 pop)</button>
+  </div>
+
+  <div class="section-label">Base (build once each, 2x2 cluster)</div>
+  <div id="controls">
+    <button class="button" id="build-casern" onclick="build('casern')">Build Casern (🪵50 🟡30)</button>
+    <button class="button" id="build-castle" onclick="build('castle')">Build Castle (🪵80 🟡100)</button>
+    <button class="button" id="build-mageTower" onclick="build('mageTower')">Build Tower (🪵40 🟡60)</button>
+  </div>
+
+  <div class="section-label">Army</div>
+  <div id="controls">
+    <button class="button" id="train-soldier" onclick="produce('soldier')">Train Soldier 🪖 (🍎20 🟡10)</button>
+    <button class="button" id="train-mage" onclick="produce('mage')">Train Mage 🧙 (🍎15 🟡20)</button>
+    <button class="button" id="train-catapult" onclick="produce('catapult')">Train Catapult 🪨 (🪵40 🟡30)</button>
   </div>
 </div>
 <button id="zoom-in" class="zoom-button" onclick="zoomIn()">+</button>
@@ -66,713 +85,553 @@ body{font-family:monospace;background:#000;color:#fff;margin:0;padding:0;height:
 <script>
 // ===== CONSTANTS =====
 const W=40, H=40;
+const MOVE_RETRY=0.15;
+const AI_DECISION_INTERVAL=3;
+const RES_INTERVAL={food:2, wood:5, gold:5};
+const RES_AMOUNT={food:4, wood:5, gold:3};
+const WORKER_COST={food:10};
+
 const UNIT_STATS = {
-  worker: {hp:5, damage:1, emoji:'👷', cost:{food:10}, maxCount:10},
-  soldier: {hp:10, damage:3, emoji:'🪖', cost:{food:20, gold:10}, maxCount:10},
-  mage: {hp:8, damage:2, emoji:'🧙', cost:{food:15, gold:20}, range:2, maxCount:10},
-  catapult: {hp:5, damage:1, emoji:'🏹', cost:{wood:40, gold:30}, maxCount:10, bonusVs:{wall:5}}
+  soldier:  {hp:10, damage:3, emoji:'🪖', cost:{food:20, gold:10}, requiredBuilding:'casern',    moveTime:0.6, atkTime:1.0, range:1},
+  mage:     {hp:8,  damage:4, emoji:'🧙', cost:{food:15, gold:20}, requiredBuilding:'mageTower', moveTime:0.7, atkTime:1.2, range:2},
+  catapult: {hp:16, damage:6, emoji:'🪨', cost:{wood:40, gold:30}, requiredBuilding:'castle',    moveTime:1.0, atkTime:1.5, range:1, vsBuildingMult:2.5}
 };
 const BUILDING_STATS = {
-  townhall: {hp:200, emoji:'🏰'},
-  casern: {hp:150, emoji:'🏟️', unlocks:['soldier']},
-  mageTower: {hp:150, emoji:'🗼', unlocks:['mage']},
-  castle: {hp:200, emoji:'🏯', unlocks:['catapult']},
-  walls: {hp:200, emoji:'🧱'},
-  house: {hp:1, emoji:'🏠', population:5}
+  townhall:  {hp:300, emoji:'🏰'},
+  casern:    {hp:150, emoji:'🏟️'},
+  castle:    {hp:200, emoji:'🏯'},
+  mageTower: {hp:150, emoji:'🗼'},
+  house:     {emoji:'🏠', population:5}
 };
 const BUILDING_COSTS = {
-  casern: {wood:50, gold:30},
+  casern:    {wood:50, gold:30},
+  castle:    {wood:80, gold:100},
   mageTower: {wood:40, gold:60},
-  castle: {wood:80, gold:100},
-  walls: {wood:20, gold:10},
-  house: {wood:30, gold:20}
+  house:     {wood:30, gold:20}
+};
+// fixed 2x2 cluster offsets from townhall
+const BASE_SLOTS = {
+  casern:    {dx:1, dy:0},
+  castle:    {dx:0, dy:1},
+  mageTower: {dx:1, dy:1}
 };
 
 // ===== GAME STATE =====
 const game = {
-  player: {
-    townhall: {x:5,y:5,hp:BUILDING_STATS.townhall.hp},
-    buildings: [],
-    units: [],
-    staging: [],
-    resources: {food:100, wood:100, gold:100},
-    population: {current:0, max:10},
-    hasWalls: false,
-    walls: []
-  },
-  enemy: {
-    townhall: {x:35,y:5,hp:BUILDING_STATS.townhall.hp},
-    buildings: [],
-    units: [],
-    staging: [],
-    resources: {food:100, wood:100, gold:100},
-    population: {current:0, max:10},
-    hasWalls: false,
-    walls: []
-  },
-  map: [],
+  player: null,
+  enemy: null,
   zoom: 1,
   offset: {x:0, y:0},
   isDragging: false,
   dragStart: {x:0, y:0},
-  selectedUnit: null,
-  lastUpdate: 0
+  lastTs: 0,
+  gameOver: false,
+  cellEls: null
 };
 
+function newSide(tx, ty){
+  const townhall = {x:tx, y:ty, hp:BUILDING_STATS.townhall.hp, type:'townhall'};
+  return {
+    townhall,
+    buildings: [townhall],
+    units: [],
+    staging: {soldier:0, mage:0, catapult:0},
+    workers: {idle:0, food:0, wood:0, gold:0},
+    resources: {food:150, wood:150, gold:100},
+    resTimers: {food:0, wood:0, gold:0},
+    population: {current:0, max:10},
+    aiTimer: 0
+  };
+}
+
+function randInt(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
+function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
+
+function randomBasePositions(){
+  const margin=3, maxc=W-margin-2;
+  let p1,p2, tries=0;
+  do{
+    p1 = {x:randInt(margin,maxc), y:randInt(margin,maxc)};
+    p2 = {x:randInt(margin,maxc), y:randInt(margin,maxc)};
+    tries++;
+  } while(dist(p1,p2) < 20 && tries < 500);
+  return [p1,p2];
+}
+
 // ===== INITIALIZATION =====
-function init() {
-  // Create map
-  game.map = Array(H).fill().map(() => Array(W).fill({terrain: '🌿'}));
-
-  // Place player townhall
-  game.player.townhall = {x:5, y:5, hp:BUILDING_STATS.townhall.hp, type:'townhall'};
-  game.player.buildings.push(game.player.townhall);
-
-  // Place enemy townhall
-  game.enemy.townhall = {x:35, y:5, hp:BUILDING_STATS.townhall.hp, type:'townhall'};
-  game.enemy.buildings.push(game.enemy.townhall);
-
-  // Start game loop
-  requestAnimationFrame(gameLoop);
+function init(){
+  const [p1,p2] = randomBasePositions();
+  game.player = newSide(p1.x, p1.y);
+  game.enemy = newSide(p2.x, p2.y);
+  game.gameOver = false;
+  game.zoom = 1;
+  game.offset = {x:0, y:0};
+  render();
 }
 
 // ===== GAME LOOP =====
-function gameLoop(timestamp) {
-  const delta = (timestamp - (game.lastUpdate || timestamp)) / 1000;
-  game.lastUpdate = timestamp;
-
-  if (!game.isDragging) {
-    updateResources(delta);
-    moveUnits();
-    checkCombat();
-    updateEnemyAI();
+function gameLoop(ts){
+  const delta = Math.min((ts - (game.lastTs || ts)) / 1000, 0.25);
+  game.lastTs = ts;
+  try{
+    if(!game.gameOver && !game.isDragging){
+      updateResources(delta);
+      moveUnits(delta);
+      checkCombat(delta);
+      updateAI(delta);
+    }
+    render();
+  } catch(e){
+    console.error('Game loop error:', e);
   }
-
-  render();
   requestAnimationFrame(gameLoop);
 }
 
 // ===== RESOURCE SYSTEM =====
-function updateResources(delta) {
-  // Player workers produce resources
-  const playerWorkers = game.player.units.filter(u => u.type === 'worker').reduce((sum, u) => sum + u.count, 0);
-  game.player.resources.food += playerWorkers * 0.1 * delta;
-  game.player.resources.wood += playerWorkers * 0.1 * delta;
-  game.player.resources.gold += playerWorkers * 0.1 * delta;
-
-  // Enemy workers
-  const enemyWorkers = game.enemy.units.filter(u => u.type === 'worker').reduce((sum, u) => sum + u.count, 0);
-  game.enemy.resources.food += enemyWorkers * 0.1 * delta;
-  game.enemy.resources.wood += enemyWorkers * 0.1 * delta;
-  game.enemy.resources.gold += enemyWorkers * 0.1 * delta;
+function updateResources(delta){
+  [game.player, game.enemy].forEach(side=>{
+    ['food','wood','gold'].forEach(r=>{
+      const workers = side.workers[r];
+      if(workers > 0){
+        side.resTimers[r] += delta;
+        const interval = RES_INTERVAL[r], amount = RES_AMOUNT[r];
+        while(side.resTimers[r] >= interval){
+          side.resources[r] += amount * workers;
+          side.resTimers[r] -= interval;
+        }
+      }
+    });
+  });
 }
 
-// ===== UNIT MOVEMENT =====
-function moveUnits() {
-  // Player units
-  game.player.units.forEach(unit => {
-    if (unit.count <= 0) return;
-    const target = game.enemy.townhall;
-    const dx = Math.sign(target.x - unit.x);
-    const dy = Math.sign(target.y - unit.y);
+// ===== COLLISION =====
+function isCellFree(x, y, side){
+  if(x < 0 || x >= W || y < 0 || y >= H) return false;
+  const other = side === game.player ? game.enemy : game.player;
+  if(side.buildings.some(b => b.x===x && b.y===y && b.hp>0)) return false;
+  if(other.buildings.some(b => b.x===x && b.y===y && b.hp>0)) return false;
+  if(side.units.some(u => u.x===x && u.y===y && u.hp>0)) return false;
+  if(other.units.some(u => u.x===x && u.y===y && u.hp>0)) return false;
+  return true;
+}
 
-    if (dx !== 0 || dy !== 0) {
-      const newX = unit.x + dx;
-      const newY = unit.y + dy;
-      if (isCellFree(newX, newY, game.player)) {
-        unit.x = newX;
-        unit.y = newY;
+// ===== MOVEMENT =====
+function stepToward(unit, target, side){
+  const ddx = Math.sign(target.x - unit.x), ddy = Math.sign(target.y - unit.y);
+  const cands = [];
+  if(ddx || ddy) cands.push([ddx,ddy]);
+  if(ddx) cands.push([ddx,0]);
+  if(ddy) cands.push([0,ddy]);
+  if(ddx){ cands.push([ddx,1]); cands.push([ddx,-1]); }
+  if(ddy){ cands.push([1,ddy]); cands.push([-1,ddy]); }
+  cands.push([1,0],[-1,0],[0,1],[0,-1]);
+  for(const [cx,cy] of cands){
+    const nx = unit.x+cx, ny = unit.y+cy;
+    if(isCellFree(nx, ny, side)) return {x:nx, y:ny};
+  }
+  return null;
+}
+
+function moveUnits(delta){
+  [[game.player, game.enemy], [game.enemy, game.player]].forEach(([side, foe])=>{
+    side.units.forEach(unit=>{
+      if(unit.hp <= 0) return;
+      const stats = UNIT_STATS[unit.type];
+      const engaging = foe.units.some(u => u.hp>0 && Math.max(Math.abs(u.x-unit.x), Math.abs(u.y-unit.y)) <= stats.range);
+      if(engaging) return;
+
+      unit.moveCd -= delta;
+      if(unit.moveCd > 0) return;
+
+      const target = foe.townhall;
+      if(Math.max(Math.abs(unit.x-target.x), Math.abs(unit.y-target.y)) <= stats.range){
+        unit.moveCd = 0.3;
+        return;
       }
-    }
-  });
-
-  // Enemy units
-  game.enemy.units.forEach(unit => {
-    if (unit.count <= 0) return;
-    const target = game.player.townhall;
-    const dx = Math.sign(target.x - unit.x);
-    const dy = Math.sign(target.y - unit.y);
-
-    if (dx !== 0 || dy !== 0) {
-      const newX = unit.x + dx;
-      const newY = unit.y + dy;
-      if (isCellFree(newX, newY, game.enemy)) {
-        unit.x = newX;
-        unit.y = newY;
-      }
-    }
+      const next = stepToward(unit, target, side);
+      if(next){ unit.x = next.x; unit.y = next.y; unit.moveCd = stats.moveTime; }
+      else unit.moveCd = MOVE_RETRY;
+    });
   });
 }
 
 // ===== COMBAT SYSTEM =====
-function checkCombat() {
-  // Player units vs enemy units
-  game.player.units.forEach(pUnit => {
-    if (pUnit.count <= 0) return;
-    game.enemy.units.forEach(eUnit => {
-      if (eUnit.count <= 0) return;
-      const dx = Math.abs(pUnit.x - eUnit.x);
-      const dy = Math.abs(pUnit.y - eUnit.y);
-      if (dx + dy <= 1) { // Adjacent
-        attackUnit(pUnit, eUnit, game.player, game.enemy);
-        attackUnit(eUnit, pUnit, game.enemy, game.player);
-      }
-    });
-    // Player units vs enemy buildings
-    game.enemy.buildings.forEach(eBuilding => {
-      if (eBuilding.hp <= 0) return;
-      const dx = Math.abs(pUnit.x - eBuilding.x);
-      const dy = Math.abs(pUnit.y - eBuilding.y);
-      const stats = UNIT_STATS[pUnit.type];
-      if (dx + dy <= (stats.range || 1)) {
-        attackBuilding(pUnit, eBuilding, game.player, game.enemy);
-      }
-    });
-  });
-
-  // Enemy units vs player units/buildings
-  game.enemy.units.forEach(eUnit => {
-    if (eUnit.count <= 0) return;
-    game.player.units.forEach(pUnit => {
-      if (pUnit.count <= 0) return;
-      const dx = Math.abs(eUnit.x - pUnit.x);
-      const dy = Math.abs(eUnit.y - pUnit.y);
-      if (dx + dy <= 1) { // Adjacent
-        attackUnit(eUnit, pUnit, game.enemy, game.player);
-        attackUnit(pUnit, eUnit, game.player, game.enemy);
-      }
-    });
-    game.player.buildings.forEach(pBuilding => {
-      if (pBuilding.hp <= 0) return;
-      const dx = Math.abs(eUnit.x - pBuilding.x);
-      const dy = Math.abs(eUnit.y - pBuilding.y);
-      const stats = UNIT_STATS[eUnit.type];
-      if (dx + dy <= (stats.range || 1)) {
-        attackBuilding(eUnit, pBuilding, game.enemy, game.player);
-      }
-    });
-  });
+function currentCount(unit){
+  return Math.max(0, Math.ceil(unit.hp / UNIT_STATS[unit.type].hp));
 }
 
-function attackUnit(attacker, defender, attackerPlayer, defenderPlayer) {
-  const aStats = UNIT_STATS[attacker.type];
-  const dStats = UNIT_STATS[defender.type];
-  let damage = aStats.damage * attacker.count;
-
-  // Bonus damage (e.g., catapult vs walls doesn't apply here)
-  if (aStats.bonusVs && dStats.type in aStats.bonusVs) {
-    damage *= aStats.bonusVs[dStats.type];
-  }
-
-  // Defender loses units
-  const unitsLost = Math.floor(damage / dStats.hp);
-  defender.count = Math.max(0, defender.count - unitsLost);
-
-  if (defender.count <= 0) {
-    // Remove unit
-    const idx = defenderPlayer.units.indexOf(defender);
-    if (idx !== -1) defenderPlayer.units.splice(idx, 1);
-  }
+function applyDamageToUnit(unit, dmg, side){
+  const before = currentCount(unit);
+  unit.hp = Math.max(0, unit.hp - dmg);
+  const after = currentCount(unit);
+  const lost = before - after;
+  if(lost > 0) side.population.current = Math.max(0, side.population.current - lost);
 }
 
-function attackBuilding(attacker, defender, attackerPlayer, defenderPlayer) {
-  const aStats = UNIT_STATS[attacker.type];
-  const dStats = BUILDING_STATS[defender.type];
-  let damage = aStats.damage * attacker.count;
+function checkCombat(delta){
+  [[game.player, game.enemy], [game.enemy, game.player]].forEach(([side, foe])=>{
+    side.units.forEach(unit=>{
+      if(unit.hp <= 0) return;
+      const stats = UNIT_STATS[unit.type];
+      unit.atkCd -= delta;
 
-  // Bonus damage (e.g., catapult vs walls)
-  if (aStats.bonusVs && defender.type in aStats.bonusVs) {
-    damage *= aStats.bonusVs[defender.type];
-  }
-
-  defender.hp -= damage;
-
-  if (defender.hp <= 0) {
-    // Building destroyed
-    if (defender.type === 'townhall') {
-      gameOver(attackerPlayer === game.player);
-    }
-    // Remove building
-    const idx = defenderPlayer.buildings.indexOf(defender);
-    if (idx !== -1) defenderPlayer.buildings.splice(idx, 1);
-  }
-}
-
-// ===== BUILDING/PRODUCTION =====
-function build(type) {
-  const player = game.player;
-  const cost = BUILDING_COSTS[type];
-  if (!cost) return;
-
-  if (player.resources.wood < cost.wood || player.resources.gold < cost.gold) {
-    alert("Not enough resources!");
-    return;
-  }
-
-  // Deduct resources
-  player.resources.wood -= cost.wood;
-  player.resources.gold -= cost.gold;
-
-  // Place building next to last building
-  let x, y;
-  if (player.buildings.length === 0) {
-    x = player.townhall.x + 1;
-    y = player.townhall.y;
-  } else {
-    const last = player.buildings[player.buildings.length - 1];
-    x = last.x + 1;
-    y = last.y;
-    if (x >= W-1) {
-      x = last.x;
-      y = last.y + 1;
-    }
-  }
-
-  const building = {x, y, hp: BUILDING_STATS[type].hp, type};
-  player.buildings.push(building);
-
-  if (type === 'walls') {
-    player.hasWalls = true;
-    // Add walls around city
-    const bounds = getCityBounds(player);
-    for (let i = bounds.minX - 1; i <= bounds.maxX + 1; i++) {
-      for (let j = bounds.minY - 1; j <= bounds.maxY + 1; j++) {
-        if (i === bounds.minX - 1 || i === bounds.maxX + 1 || j === bounds.minY - 1 || j === bounds.maxY + 1) {
-          if (isCellFree(i, j, player)) {
-            player.walls.push({x: i, y: j, hp: BUILDING_STATS.walls.hp, type: 'walls'});
+      let target = foe.units.find(u => u.hp>0 && Math.max(Math.abs(u.x-unit.x), Math.abs(u.y-unit.y)) <= stats.range);
+      let targetIsBuilding = false;
+      if(!target){
+        target = foe.buildings.find(b => b.hp>0 && Math.max(Math.abs(b.x-unit.x), Math.abs(b.y-unit.y)) <= stats.range);
+        targetIsBuilding = true;
+      }
+      if(target && unit.atkCd <= 0){
+        let dmg = currentCount(unit) * stats.damage;
+        if(targetIsBuilding && stats.vsBuildingMult) dmg *= stats.vsBuildingMult;
+        if(targetIsBuilding){
+          target.hp -= dmg;
+          if(target.hp <= 0 && target.type === 'townhall'){
+            gameOver(side === game.player);
           }
+        } else {
+          applyDamageToUnit(target, dmg, foe);
         }
+        unit.atkCd = stats.atkTime;
       }
-    }
-  } else if (type === 'house') {
-    player.population.max += BUILDING_STATS.house.population;
-  }
-
-  render();
-}
-
-function produce(type) {
-  const player = game.player;
-  const cost = UNIT_STATS[type].cost;
-  if (!cost) return;
-
-  // Check resources and population
-  if (player.resources.food < (cost.food || 0) ||
-      player.resources.gold < (cost.gold || 0) ||
-      player.resources.wood < (cost.wood || 0) ||
-      player.population.current >= player.population.max) {
-    alert("Not enough resources or population!");
-    return;
-  }
-
-  // Check if building is unlocked
-  const requiredBuilding = UNIT_STATS[type].requiredBuilding;
-  if (requiredBuilding && !player.buildings.some(b => b.type === requiredBuilding)) {
-    alert(`Need ${requiredBuilding} to train ${type}!`);
-    return;
-  }
-
-  // Deduct resources
-  player.resources.food -= cost.food || 0;
-  player.resources.gold -= cost.gold || 0;
-  player.resources.wood -= cost.wood || 0;
-
-  // Add to staging
-  let existing = player.staging.find(u => u.type === type);
-  if (existing) {
-    existing.count += 1;
-  } else {
-    player.staging.push({type, count: 1});
-  }
-  player.population.current++;
-
-  renderStaging();
-}
-
-function deployAll() {
-  game.player.staging.forEach(staged => {
-    // Deploy near townhall
-    const x = game.player.townhall.x + Math.floor(Math.random() * 3) - 1;
-    const y = game.player.townhall.y + Math.floor(Math.random() * 3) - 1;
-
-    // Find free cell
-    let placed = false;
-    for (let dx = -2; dx <= 2 && !placed; dx++) {
-      for (let dy = -2; dy <= 2 && !placed; dy++) {
-        const nx = x + dx;
-        const ny = y + dy;
-        if (isCellFree(nx, ny, game.player)) {
-          game.player.units.push({
-            type: staged.type,
-            x: nx,
-            y: ny,
-            count: staged.count,
-            hp: UNIT_STATS[staged.type].hp
-          });
-          placed = true;
-        }
-      }
-    }
+    });
   });
 
-  game.player.staging = [];
-  renderStaging();
-  render();
-}
-
-function getCityBounds(player) {
-  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-  player.buildings.forEach(b => {
-    minX = Math.min(minX, b.x);
-    maxX = Math.max(maxX, b.x);
-    minY = Math.min(minY, b.y);
-    maxY = Math.max(maxY, b.y);
+  [game.player, game.enemy].forEach(s=>{
+    s.units = s.units.filter(u => u.hp > 0);
+    s.buildings = s.buildings.filter(b => b.hp > 0);
   });
-  return {minX, maxX, minY, maxY};
 }
 
-// ===== ENEMY AI =====
-function updateEnemyAI() {
-  // Produce units randomly
-  if (Math.random() < 0.005) { // 0.5% chance per frame
-    const availableTypes = ['worker'];
-    if (game.enemy.buildings.some(b => b.type === 'casern')) availableTypes.push('soldier');
-    if (game.enemy.buildings.some(b => b.type === 'mageTower')) availableTypes.push('mage');
-    if (game.enemy.buildings.some(b => b.type === 'castle')) availableTypes.push('catapult');
-
-    const type = availableTypes[Math.floor(Math.random() * availableTypes.length)];
-    const cost = UNIT_STATS[type].cost;
-    if (game.enemy.resources.food >= (cost.food || 0) &&
-        game.enemy.resources.gold >= (cost.gold || 0) &&
-        game.enemy.resources.wood >= (cost.wood || 0) &&
-        game.enemy.population.current < game.enemy.population.max) {
-      game.enemy.resources.food -= cost.food || 0;
-      game.enemy.resources.gold -= cost.gold || 0;
-      game.enemy.resources.wood -= cost.wood || 0;
-      game.enemy.population.current++;
-
-      // Deploy directly (no staging for AI)
-      const x = game.enemy.townhall.x + Math.floor(Math.random() * 3) - 1;
-      const y = game.enemy.townhall.y + Math.floor(Math.random() * 3) - 1;
-      let placed = false;
-      for (let dx = -2; dx <= 2 && !placed; dx++) {
-        for (let dy = -2; dy <= 2 && !placed; dy++) {
-          const nx = x + dx;
-          const ny = y + dy;
-          if (isCellFree(nx, ny, game.enemy)) {
-            game.enemy.units.push({
-              type,
-              x: nx,
-              y: ny,
-              count: 1,
-              hp: UNIT_STATS[type].hp
-            });
-            placed = true;
-          }
-        }
-      }
-    }
-  }
-
-  // Build buildings randomly
-  if (Math.random() < 0.002 && game.enemy.buildings.length < 4) {
-    const availableBuildings = ['casern', 'mageTower', 'castle', 'walls', 'house'];
-    const type = availableBuildings[Math.floor(Math.random() * availableBuildings.length)];
-    const cost = BUILDING_COSTS[type];
-    if (game.enemy.resources.wood >= cost.wood && game.enemy.resources.gold >= cost.gold) {
-      buildEnemyBuilding(type);
-    }
-  }
-}
-
-function buildEnemyBuilding(type) {
-  const cost = BUILDING_COSTS[type];
-  game.enemy.resources.wood -= cost.wood;
-  game.enemy.resources.gold -= cost.gold;
-
-  let x, y;
-  if (game.enemy.buildings.length === 0) {
-    x = game.enemy.townhall.x + 1;
-    y = game.enemy.townhall.y;
-  } else {
-    const last = game.enemy.buildings[game.enemy.buildings.length - 1];
-    x = last.x + 1;
-    y = last.y;
-    if (x >= W-1) {
-      x = last.x;
-      y = last.y + 1;
-    }
-  }
-
-  const building = {x, y, hp: BUILDING_STATS[type].hp, type};
-  game.enemy.buildings.push(building);
-
-  if (type === 'walls') {
-    game.enemy.hasWalls = true;
-    const bounds = getCityBounds(game.enemy);
-    for (let i = bounds.minX - 1; i <= bounds.maxX + 1; i++) {
-      for (let j = bounds.minY - 1; j <= bounds.maxY + 1; j++) {
-        if (i === bounds.minX - 1 || i === bounds.maxX + 1 || j === bounds.minY - 1 || j === bounds.maxY + 1) {
-          if (isCellFree(i, j, game.enemy)) {
-            game.enemy.walls.push({x: i, y: j, hp: BUILDING_STATS.walls.hp, type: 'walls'});
-          }
-        }
-      }
-    }
-  } else if (type === 'house') {
-    game.enemy.population.max += BUILDING_STATS.house.population;
-  }
-}
-
-// ===== HELPERS =====
-function isCellFree(x, y, player) {
-  if (x < 0 || x >= W || y < 0 || y >= H) return false;
-
-  // Check for player buildings
-  if (player.buildings.some(b => b.x === x && b.y === y)) return false;
-  // Check for player walls
-  if (player.walls.some(w => w.x === x && w.y === y)) return false;
-  // Check for player units
-  if (player.units.some(u => u.x === x && u.y === y)) return false;
-  // Check for enemy buildings (if player is player)
-  if (player === game.player && game.enemy.buildings.some(b => b.x === x && b.y === y)) return false;
-  if (player === game.player && game.enemy.walls.some(w => w.x === x && w.y === y)) return false;
-  if (player === game.player && game.enemy.units.some(u => u.x === x && u.y === y)) return false;
-  // Check for enemy buildings (if player is enemy)
-  if (player === game.enemy && game.player.buildings.some(b => b.x === x && b.y === y)) return false;
-  if (player === game.enemy && game.player.walls.some(w => w.x === x && w.y === y)) return false;
-  if (player === game.enemy && game.player.units.some(u => u.x === x && u.y === y)) return false;
-
-  return true;
-}
-
-function gameOver(playerWon) {
+function gameOver(playerWon){
+  if(game.gameOver) return;
   game.gameOver = true;
-  setTimeout(() => {
-    alert(playerWon ? "🎉 VICTORY! Enemy townhall destroyed!" : "💀 DEFEAT! Your townhall was destroyed!");
+  setTimeout(()=>{
+    alert(playerWon ? '🎉 VICTORY! Enemy townhall destroyed!' : '💀 DEFEAT! Your townhall was destroyed!');
     init();
   }, 100);
 }
 
-// ===== RENDERING =====
-function render() {
-  const gameDiv = document.getElementById('game');
-  gameDiv.innerHTML = '';
-  gameDiv.style.transform = `scale(${game.zoom}) translate(${game.offset.x}px, ${game.offset.y}px)`;
+// ===== BUILDING / PRODUCTION (player) =====
+function build(type){
+  const side = game.player;
+  const cost = BUILDING_COSTS[type];
+  if(!cost) return;
+  if(type !== 'house' && side.buildings.some(b => b.type === type)){
+    alert('Already built!');
+    return;
+  }
+  if(side.resources.wood < cost.wood || side.resources.gold < cost.gold){
+    alert('Not enough resources!');
+    return;
+  }
+  side.resources.wood -= cost.wood;
+  side.resources.gold -= cost.gold;
 
-  // Render terrain and buildings
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const cell = document.createElement('div');
-      cell.className = 'cell';
+  if(type === 'house'){
+    side.population.max += BUILDING_STATS.house.population;
+    render();
+    return;
+  }
+  const slot = BASE_SLOTS[type];
+  const bx = side.townhall.x + slot.dx, by = side.townhall.y + slot.dy;
+  side.buildings.push({x:bx, y:by, hp:BUILDING_STATS[type].hp, type});
+  render();
+}
 
-      // Check for player buildings
-      let building = game.player.buildings.find(b => b.x === x && b.y === y);
-      if (building) {
-        cell.textContent = BUILDING_STATS[building.type].emoji;
-        cell.classList.add('building');
-        gameDiv.appendChild(cell);
-        continue;
+function trainWorker(){
+  const side = game.player;
+  if(side.population.current >= side.population.max){ alert('Population cap reached! Build a house.'); return; }
+  if(side.resources.food < WORKER_COST.food){ alert('Not enough food!'); return; }
+  side.resources.food -= WORKER_COST.food;
+  side.population.current++;
+  side.workers.idle++;
+  render();
+}
+
+function assignWorker(res, delta){
+  const side = game.player;
+  if(delta > 0){
+    if(side.workers.idle <= 0) return;
+    side.workers.idle--; side.workers[res]++;
+  } else {
+    if(side.workers[res] <= 0) return;
+    side.workers[res]--; side.workers.idle++;
+  }
+  render();
+}
+
+function produce(type){
+  const side = game.player;
+  const stats = UNIT_STATS[type];
+  if(side.population.current >= side.population.max){ alert('Population cap reached! Build a house.'); return; }
+  if(!side.buildings.some(b => b.type === stats.requiredBuilding)){
+    alert(`Need a ${stats.requiredBuilding} to train ${type}!`);
+    return;
+  }
+  const cost = stats.cost;
+  if(side.resources.food < (cost.food||0) || side.resources.gold < (cost.gold||0) || side.resources.wood < (cost.wood||0)){
+    alert('Not enough resources!');
+    return;
+  }
+  side.resources.food -= cost.food||0;
+  side.resources.gold -= cost.gold||0;
+  side.resources.wood -= cost.wood||0;
+  side.population.current++;
+  side.staging[type]++;
+  if(side.staging[type] >= 10) deploySquad(side, type);
+  render();
+}
+
+function findSpawnSpot(side){
+  for(let r=0; r<8; r++){
+    for(let dx=-r; dx<=r; dx++){
+      for(let dy=-r; dy<=r; dy++){
+        const x = side.townhall.x+dx, y = side.townhall.y+dy;
+        if(isCellFree(x, y, side)) return {x, y};
       }
+    }
+  }
+  return null;
+}
 
-      // Check for player walls
-      building = game.player.walls.find(w => w.x === x && w.y === y);
-      if (building) {
-        cell.textContent = BUILDING_STATS[building.type].emoji;
-        cell.classList.add('building');
-        gameDiv.appendChild(cell);
-        continue;
+function deploySquad(side, type){
+  const count = side.staging[type];
+  if(count <= 0) return;
+  const spot = findSpawnSpot(side);
+  if(!spot) return;
+  side.units.push({type, x:spot.x, y:spot.y, hp:count*UNIT_STATS[type].hp, moveCd:0, atkCd:0});
+  side.staging[type] = 0;
+}
+
+function deployAll(){
+  ['soldier','mage','catapult'].forEach(t => deploySquad(game.player, t));
+  render();
+}
+
+// ===== ENEMY AI =====
+function assignWorkerSide(side, res, delta){
+  if(delta > 0){
+    if(side.workers.idle <= 0) return;
+    side.workers.idle--; side.workers[res]++;
+  } else {
+    if(side.workers[res] <= 0) return;
+    side.workers[res]--; side.workers.idle++;
+  }
+}
+
+function updateAI(delta){
+  const side = game.enemy;
+  side.aiTimer += delta;
+  if(side.aiTimer < AI_DECISION_INTERVAL) return;
+  side.aiTimer = 0;
+
+  let guard = 0;
+  while(side.workers.idle > 0 && guard++ < 20){
+    const counts = ['food','wood','gold'].map(r => ({r, c: side.workers[r]}));
+    counts.sort((a,b) => a.c - b.c);
+    assignWorkerSide(side, counts[0].r, 1);
+  }
+
+  const order = ['casern','castle','mageTower'];
+  for(const t of order){
+    if(!side.buildings.some(b => b.type === t)){
+      const cost = BUILDING_COSTS[t];
+      if(side.resources.wood >= cost.wood && side.resources.gold >= cost.gold){
+        side.resources.wood -= cost.wood; side.resources.gold -= cost.gold;
+        const slot = BASE_SLOTS[t];
+        side.buildings.push({x:side.townhall.x+slot.dx, y:side.townhall.y+slot.dy, hp:BUILDING_STATS[t].hp, type:t});
       }
-
-      // Check for enemy buildings
-      building = game.enemy.buildings.find(b => b.x === x && b.y === y);
-      if (building) {
-        cell.textContent = BUILDING_STATS[building.type].emoji;
-        cell.classList.add('building', 'enemy');
-        gameDiv.appendChild(cell);
-        continue;
-      }
-
-      // Check for enemy walls
-      building = game.enemy.walls.find(w => w.x === x && w.y === y);
-      if (building) {
-        cell.textContent = BUILDING_STATS[building.type].emoji;
-        cell.classList.add('building', 'enemy');
-        gameDiv.appendChild(cell);
-        continue;
-      }
-
-      // Check for player units
-      let unit = game.player.units.find(u => u.x === x && u.y === y);
-      if (unit) {
-        cell.textContent = UNIT_STATS[unit.type].emoji;
-        cell.classList.add('unit', 'player');
-        if (unit.count > 1) {
-          const count = document.createElement('span');
-          count.className = 'unit-count';
-          count.textContent = unit.count;
-          cell.appendChild(count);
-        }
-        gameDiv.appendChild(cell);
-        continue;
-      }
-
-      // Check for enemy units
-      unit = game.enemy.units.find(u => u.x === x && u.y === y);
-      if (unit) {
-        cell.textContent = UNIT_STATS[unit.type].emoji;
-        cell.classList.add('unit', 'enemy');
-        if (unit.count > 1) {
-          const count = document.createElement('span');
-          count.className = 'unit-count';
-          count.textContent = unit.count;
-          cell.appendChild(count);
-        }
-        gameDiv.appendChild(cell);
-        continue;
-      }
-
-      // Default terrain
-      cell.textContent = game.map[y][x].terrain;
-      gameDiv.appendChild(cell);
+      break;
     }
   }
 
-  // Update UI
-  renderUI();
-}
+  if(side.population.current >= side.population.max - 2){
+    const cost = BUILDING_COSTS.house;
+    if(side.resources.wood >= cost.wood && side.resources.gold >= cost.gold){
+      side.resources.wood -= cost.wood; side.resources.gold -= cost.gold;
+      side.population.max += BUILDING_STATS.house.population;
+    }
+  }
 
-function renderUI() {
-  // Player stats
-  document.getElementById('player-food').textContent = Math.floor(game.player.resources.food);
-  document.getElementById('player-wood').textContent = Math.floor(game.player.resources.wood);
-  document.getElementById('player-gold').textContent = Math.floor(game.player.resources.gold);
-  document.getElementById('player-pop').textContent = `${game.player.population.current}/${game.player.population.max}`;
+  const totalWorkers = side.workers.idle + side.workers.food + side.workers.wood + side.workers.gold;
+  if(totalWorkers < 8 && side.population.current < side.population.max && side.resources.food >= WORKER_COST.food){
+    side.resources.food -= WORKER_COST.food;
+    side.population.current++;
+    side.workers.idle++;
+  }
 
-  // Enemy stats
-  document.getElementById('enemy-food').textContent = Math.floor(game.enemy.resources.food);
-  document.getElementById('enemy-wood').textContent = Math.floor(game.enemy.resources.wood);
-  document.getElementById('enemy-gold').textContent = Math.floor(game.enemy.resources.gold);
+  const options = ['soldier','mage','catapult'].filter(t => side.buildings.some(b => b.type === UNIT_STATS[t].requiredBuilding));
+  if(options.length && side.population.current < side.population.max){
+    const type = options[randInt(0, options.length-1)];
+    const cost = UNIT_STATS[type].cost;
+    if(side.resources.food >= (cost.food||0) && side.resources.gold >= (cost.gold||0) && side.resources.wood >= (cost.wood||0)){
+      side.resources.food -= cost.food||0;
+      side.resources.gold -= cost.gold||0;
+      side.resources.wood -= cost.wood||0;
+      side.population.current++;
+      side.staging[type]++;
+      if(side.staging[type] >= 10) deploySquad(side, type);
+    }
+  }
 
-  // Staging area
-  renderStaging();
-
-  // Building buttons
-  document.getElementById('build-casern').disabled = !canAfford(game.player, BUILDING_COSTS.casern);
-  document.getElementById('build-mageTower').disabled = !canAfford(game.player, BUILDING_COSTS.mageTower);
-  document.getElementById('build-castle').disabled = !canAfford(game.player, BUILDING_COSTS.castle);
-  document.getElementById('build-walls').disabled = !canAfford(game.player, BUILDING_COSTS.walls) || game.player.hasWalls;
-  document.getElementById('build-house').disabled = !canAfford(game.player, BUILDING_COSTS.house);
-
-  // Unit buttons
-  document.getElementById('produce-worker').disabled = !canAfford(game.player, UNIT_STATS.worker.cost) || game.player.population.current >= game.player.population.max;
-  document.getElementById('produce-soldier').disabled = !canAfford(game.player, UNIT_STATS.soldier.cost) || game.player.population.current >= game.player.population.max || !game.player.buildings.some(b => b.type === 'casern');
-  document.getElementById('produce-mage').disabled = !canAfford(game.player, UNIT_STATS.mage.cost) || game.player.population.current >= game.player.population.max || !game.player.buildings.some(b => b.type === 'mageTower');
-  document.getElementById('produce-catapult').disabled = !canAfford(game.player, UNIT_STATS.catapult.cost) || game.player.population.current >= game.player.population.max || !game.player.buildings.some(b => b.type === 'castle');
-}
-
-function renderStaging() {
-  const stagingDiv = document.getElementById('staging-units');
-  stagingDiv.innerHTML = '';
-  game.player.staging.forEach(unit => {
-    const button = document.createElement('button');
-    button.className = 'button';
-    button.innerHTML = `${UNIT_STATS[unit.type].emoji} x${unit.count}`;
-    button.onclick = () => deployUnit(unit.type);
-    stagingDiv.appendChild(button);
+  ['soldier','mage','catapult'].forEach(t=>{
+    if(side.staging[t] >= 4 && Math.random() < 0.5) deploySquad(side, t);
   });
 }
 
-function deployUnit(type) {
-  const staged = game.player.staging.find(u => u.type === type);
-  if (!staged) return;
-
-  // Deploy near townhall
-  const x = game.player.townhall.x + Math.floor(Math.random() * 3) - 1;
-  const y = game.player.townhall.y + Math.floor(Math.random() * 3) - 1;
-
-  // Find free cell
-  let placed = false;
-  for (let dx = -2; dx <= 2 && !placed; dx++) {
-    for (let dy = -2; dy <= 2 && !placed; dy++) {
-      const nx = x + dx;
-      const ny = y + dy;
-      if (isCellFree(nx, ny, game.player)) {
-        game.player.units.push({
-          type: staged.type,
-          x: nx,
-          y: ny,
-          count: staged.count,
-          hp: UNIT_STATS[staged.type].hp
-        });
-        placed = true;
-      }
+// ===== RENDERING =====
+function buildGrid(container){
+  container.innerHTML = '';
+  game.cellEls = [];
+  for(let y=0; y<H; y++){
+    const row = [];
+    for(let x=0; x<W; x++){
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      container.appendChild(cell);
+      row.push(cell);
     }
+    game.cellEls.push(row);
   }
-
-  if (placed) {
-    game.player.staging = game.player.staging.filter(u => u !== staged);
-  }
-
-  renderStaging();
-  render();
 }
 
-function canAfford(player, cost) {
-  return player.resources.wood >= (cost.wood || 0) &&
-         player.resources.gold >= (cost.gold || 0) &&
-         player.resources.food >= (cost.food || 0);
+function paintGrid(){
+  for(let y=0; y<H; y++){
+    for(let x=0; x<W; x++){
+      const cell = game.cellEls[y][x];
+      cell.textContent = '🌿';
+      cell.className = 'cell';
+    }
+  }
+  const paintBuildings = (list, cls) => list.forEach(o=>{
+    if(o.x<0||o.x>=W||o.y<0||o.y>=H) return;
+    const cell = game.cellEls[o.y][o.x];
+    cell.textContent = BUILDING_STATS[o.type].emoji;
+    cell.className = 'cell building ' + cls;
+  });
+  paintBuildings(game.player.buildings, 'player');
+  paintBuildings(game.enemy.buildings, 'enemy');
+
+  const paintUnits = (list, cls) => list.forEach(u=>{
+    if(u.x<0||u.x>=W||u.y<0||u.y>=H) return;
+    const cell = game.cellEls[u.y][u.x];
+    cell.textContent = UNIT_STATS[u.type].emoji;
+    cell.className = 'cell unit ' + cls;
+    const c = currentCount(u);
+    if(c > 1){
+      const span = document.createElement('span');
+      span.className = 'unit-count';
+      span.textContent = c;
+      cell.appendChild(span);
+    }
+  });
+  paintUnits(game.player.units, 'player');
+  paintUnits(game.enemy.units, 'enemy');
+}
+
+function renderHUD(){
+  const f = v => Math.floor(v);
+  document.getElementById('player-food').textContent = f(game.player.resources.food);
+  document.getElementById('player-wood').textContent = f(game.player.resources.wood);
+  document.getElementById('player-gold').textContent = f(game.player.resources.gold);
+  document.getElementById('player-pop').textContent = `${game.player.population.current}/${game.player.population.max}`;
+  document.getElementById('enemy-food').textContent = f(game.enemy.resources.food);
+  document.getElementById('enemy-wood').textContent = f(game.enemy.resources.wood);
+  document.getElementById('enemy-gold').textContent = f(game.enemy.resources.gold);
+}
+
+function renderWorkers(){
+  const el = document.getElementById('worker-panel');
+  const w = game.player.workers;
+  el.innerHTML = `
+    <span>👷 Idle: ${w.idle}</span>
+    <span>🍎 ${w.food} <button class="button" onclick="assignWorker('food',1)">+</button><button class="button" onclick="assignWorker('food',-1)">-</button></span>
+    <span>🪵 ${w.wood} <button class="button" onclick="assignWorker('wood',1)">+</button><button class="button" onclick="assignWorker('wood',-1)">-</button></span>
+    <span>🟡 ${w.gold} <button class="button" onclick="assignWorker('gold',1)">+</button><button class="button" onclick="assignWorker('gold',-1)">-</button></span>
+  `;
+}
+
+function renderStaging(){
+  const el = document.getElementById('staging-units');
+  el.innerHTML = '';
+  ['soldier','mage','catapult'].forEach(type=>{
+    const n = game.player.staging[type];
+    const span = document.createElement('span');
+    span.innerHTML = `${UNIT_STATS[type].emoji} ${n}/10 `;
+    const btn = document.createElement('button');
+    btn.className = 'button';
+    btn.textContent = 'Deploy';
+    btn.disabled = n === 0;
+    btn.onclick = () => { deploySquad(game.player, type); render(); };
+    span.appendChild(btn);
+    el.appendChild(span);
+  });
+}
+
+function canAfford(side, cost){
+  return side.resources.wood >= (cost.wood||0) && side.resources.gold >= (cost.gold||0) && side.resources.food >= (cost.food||0);
+}
+
+function updateButtons(){
+  const p = game.player;
+  const setBtn = (id, disabled) => { const b = document.getElementById(id); if(b) b.disabled = disabled; };
+  setBtn('build-casern', p.buildings.some(b=>b.type==='casern') || !canAfford(p, BUILDING_COSTS.casern));
+  setBtn('build-castle', p.buildings.some(b=>b.type==='castle') || !canAfford(p, BUILDING_COSTS.castle));
+  setBtn('build-mageTower', p.buildings.some(b=>b.type==='mageTower') || !canAfford(p, BUILDING_COSTS.mageTower));
+  setBtn('build-house', !canAfford(p, BUILDING_COSTS.house));
+  setBtn('train-worker', p.population.current >= p.population.max || p.resources.food < WORKER_COST.food);
+  ['soldier','mage','catapult'].forEach(t=>{
+    const stats = UNIT_STATS[t];
+    const dis = p.population.current >= p.population.max || !p.buildings.some(b=>b.type===stats.requiredBuilding) || !canAfford(p, stats.cost);
+    setBtn('train-'+t, dis);
+  });
+}
+
+function render(){
+  const gameDiv = document.getElementById('game');
+  gameDiv.style.transform = `scale(${game.zoom}) translate(${game.offset.x}px, ${game.offset.y}px)`;
+  if(!game.cellEls) buildGrid(gameDiv);
+  paintGrid();
+  renderHUD();
+  renderWorkers();
+  renderStaging();
+  updateButtons();
 }
 
 // ===== ZOOM/PAN =====
-function zoomIn() {
-  game.zoom = Math.min(game.zoom + 0.2, 2);
-  render();
-}
+function zoomIn(){ game.zoom = Math.min(game.zoom + 0.2, 2); render(); }
+function zoomOut(){ game.zoom = Math.max(game.zoom - 0.2, 0.5); render(); }
 
-function zoomOut() {
-  game.zoom = Math.max(game.zoom - 0.2, 0.5);
-  render();
-}
-
-// Touch/drag for panning
-document.getElementById('game').addEventListener('mousedown', (e) => {
+document.getElementById('game').addEventListener('mousedown', (e)=>{
   game.isDragging = true;
   game.dragStart = {x: e.clientX - game.offset.x, y: e.clientY - game.offset.y};
 });
-
-document.addEventListener('mousemove', (e) => {
-  if (!game.isDragging) return;
+document.addEventListener('mousemove', (e)=>{
+  if(!game.isDragging) return;
   game.offset.x = e.clientX - game.dragStart.x;
   game.offset.y = e.clientY - game.dragStart.y;
   render();
 });
+document.addEventListener('mouseup', ()=>{ game.isDragging = false; });
 
-document.addEventListener('mouseup', () => {
-  game.isDragging = false;
-});
-
-// Touch events for mobile
-document.getElementById('game').addEventListener('touchstart', (e) => {
+document.getElementById('game').addEventListener('touchstart', (e)=>{
   game.isDragging = true;
   game.dragStart = {x: e.touches[0].clientX - game.offset.x, y: e.touches[0].clientY - game.offset.y};
   e.preventDefault();
 });
-
-document.addEventListener('touchmove', (e) => {
-  if (!game.isDragging) return;
+document.addEventListener('touchmove', (e)=>{
+  if(!game.isDragging) return;
   game.offset.x = e.touches[0].clientX - game.dragStart.x;
   game.offset.y = e.touches[0].clientY - game.dragStart.y;
   render();
   e.preventDefault();
 });
+document.addEventListener('touchend', ()=>{ game.isDragging = false; });
 
-document.addEventListener('touchend', () => {
-  game.isDragging = false;
-});
-
-// Initialize
+// ===== BOOTSTRAP =====
 init();
+requestAnimationFrame(gameLoop);
 </script>
 </body>
 </html>
