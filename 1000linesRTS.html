@@ -1,25 +1,32 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8" name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<meta charset="UTF-8" name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
 <title>Emoji Empire</title>
 <style>
 body{font-family:monospace;background:#000;color:#fff;margin:0;padding:0;height:100vh;display:flex;flex-direction:column;touch-action:manipulation;overflow:hidden}
-#game-container{flex:1;position:relative;overflow:hidden}
-#game{position:absolute;display:grid;grid-template-columns:repeat(40,1fr);gap:0;font-size:12px;line-height:1;transform-origin:0 0;touch-action:none}
+#top-hud{flex-shrink:0;background:#111;border-bottom:1px solid #444;padding:6px 10px;font-size:14px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+#game-container{flex:1;position:relative;overflow:hidden;min-height:0}
+#game{position:absolute;display:grid;grid-template-columns:repeat(40,1fr);grid-template-rows:repeat(40,1fr);gap:0;font-size:12px;line-height:1;transform-origin:0 0;touch-action:none}
 .cell{aspect-ratio:1/1;display:flex;justify-content:center;align-items:center;position:relative}
 .unit-count{position:absolute;bottom:-5px;right:-5px;font-size:8px;color:#fff;text-shadow:0 0 2px #000;background:rgba(0,0,0,0.6);border-radius:50%;width:14px;height:14px;display:flex;justify-content:center;align-items:center}
-#ui{background:#222;padding:8px 10px;border-top:1px solid #444;display:flex;flex-direction:column;gap:8px;max-height:42vh;overflow-y:auto}
-#stats{display:flex;justify-content:space-between;font-size:13px;flex-wrap:wrap;gap:6px}
-.worker-panel{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;align-items:center;background:#1a1a1a;padding:4px 6px;border-radius:4px}
-.staging{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:#1a1a1a;padding:4px 6px;border-radius:4px}
-.controls{display:flex;gap:5px;flex-wrap:wrap}
+.dmg-popup{position:absolute;top:0;left:50%;transform:translate(-50%,0);color:#ff5b5b;font-size:10px;font-weight:bold;text-shadow:0 0 3px #000;pointer-events:none;z-index:20;animation:floatUp 0.8s ease-out forwards}
+@keyframes floatUp{
+  0%{opacity:1;transform:translate(-50%,0);}
+  100%{opacity:0;transform:translate(-50%,-22px);}
+}
+.hp-bar-bg{position:absolute;bottom:1px;left:8%;width:84%;height:3px;background:rgba(0,0,0,0.6);border-radius:2px;overflow:hidden;z-index:5}
+.hp-bar-fill{height:100%}
+#ui{background:#222;padding:8px 10px calc(20px + env(safe-area-inset-bottom, 0px)) 10px;border-top:1px solid #444;display:flex;flex-direction:column;gap:8px;max-height:42vh;overflow-y:auto}
+#worker-panel{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;align-items:center;background:#1a1a1a;padding:4px 6px;border-radius:4px}
+#staging{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:#1a1a1a;padding:4px 6px;border-radius:4px}
+#controls{display:flex;gap:5px;flex-wrap:wrap}
 .section-label{font-size:10px;color:#888;text-transform:uppercase;margin-top:2px}
 .button{background:#333;border:1px solid #444;color:#fff;padding:5px 9px;cursor:pointer;border-radius:3px;font-size:12px}
 .button:disabled{opacity:0.4;cursor:not-allowed}
 .zoom-button{padding:8px;font-size:16px}
-#zoom-in,#zoom-out{position:fixed;bottom:10px;right:10px;z-index:100}
-#zoom-in{top:auto;bottom:60px}
+#zoom-in,#zoom-out{position:fixed;bottom:calc(10px + env(safe-area-inset-bottom, 0px));right:10px;z-index:100}
+#zoom-in{top:auto;bottom:calc(60px + env(safe-area-inset-bottom, 0px))}
 .building.player{color:#4af}.building.enemy{color:#f66}
 .unit.player{color:#8cf}.unit.enemy{color:#f88}
 @media (max-width:768px){
@@ -30,53 +37,43 @@ body{font-family:monospace;background:#000;color:#fff;margin:0;padding:0;height:
 </style>
 </head>
 <body>
+<div id="top-hud">
+  <span>🍎<span id="player-food">0</span></span>
+  <span>🪵<span id="player-wood">0</span></span>
+  <span>🟡<span id="player-gold">0</span></span>
+  <span>👥<span id="player-pop">0/10</span></span>
+</div>
 <div id="game-container">
   <div id="game"></div>
 </div>
 <div id="ui">
-  <div id="stats">
-    <div>
-      <b>You</b>
-      🍎<span id="player-food">0</span>
-      🪵<span id="player-wood">0</span>
-      🟡<span id="player-gold">0</span>
-      👥<span id="player-pop">0/10</span>
-    </div>
-    <div>
-      <b>Enemy</b>
-      🍎<span id="enemy-food">0</span>
-      🪵<span id="enemy-wood">0</span>
-      🟡<span id="enemy-gold">0</span>
-    </div>
-  </div>
-
   <div class="section-label">Workers</div>
-  <div class="worker-panel" id="worker-panel"></div>
+  <div id="worker-panel"></div>
 
   <div class="section-label">Staging (max 10/squad, auto-deploys at cap)</div>
-  <div class="staging">
+  <div id="staging">
     <div id="staging-units" style="display:flex;gap:10px;flex-wrap:wrap"></div>
-    <button class="button" data-action="deployAll">Deploy All</button>
+    <button class="button" onclick="deployAll()">Deploy All</button>
   </div>
 
   <div class="section-label">Economy</div>
-  <div class="controls">
-    <button class="button" data-action="train-worker">Train Worker (🍎10)</button>
-    <button class="button" data-action="build-house">Build House (🪵30 🟡20, +5 pop)</button>
+  <div id="controls">
+    <button class="button" id="train-worker" onclick="trainWorker()">Train Worker (🍎10)</button>
+    <button class="button" id="build-house" onclick="build('house')">Build House (🪵30 🟡20, +5 pop)</button>
   </div>
 
   <div class="section-label">Base (build once each, 2x2 cluster)</div>
-  <div class="controls">
-    <button class="button" data-action="build-casern">Build Casern (🪵50 🟡30)</button>
-    <button class="button" data-action="build-castle">Build Castle (🪵80 🟡100)</button>
-    <button class="button" data-action="build-mageTower">Build Tower (🪵40 🟡60)</button>
+  <div id="controls">
+    <button class="button" id="build-casern" onclick="build('casern')">Build Casern (🪵50 🟡30)</button>
+    <button class="button" id="build-castle" onclick="build('castle')">Build Castle (🪵80 🟡100)</button>
+    <button class="button" id="build-mageTower" onclick="build('mageTower')">Build Tower (🪵40 🟡60)</button>
   </div>
 
   <div class="section-label">Army</div>
-  <div class="controls">
-    <button class="button" data-action="train-soldier">Train Soldier 🪖 (🍎20 🟡10)</button>
-    <button class="button" data-action="train-mage">Train Mage 🧙 (🍎15 🟡20)</button>
-    <button class="button" data-action="train-catapult">Train Catapult 🪨 (🪵40 🟡30)</button>
+  <div id="controls">
+    <button class="button" id="train-soldier" onclick="produce('soldier')">Train Soldier 🪖 (🍎20 🟡10)</button>
+    <button class="button" id="train-mage" onclick="produce('mage')">Train Mage 🧙 (🍎15 🟡20)</button>
+    <button class="button" id="train-catapult" onclick="produce('catapult')">Train Catapult 🪨 (🪵40 🟡30)</button>
   </div>
 </div>
 <button id="zoom-in" class="zoom-button" onclick="zoomIn()">+</button>
@@ -109,12 +106,14 @@ const BUILDING_COSTS = {
   mageTower: {wood:40, gold:60},
   house:     {wood:30, gold:20}
 };
+// fixed 2x2 cluster offsets from townhall
 const BASE_SLOTS = {
   casern:    {dx:1, dy:0},
   castle:    {dx:0, dy:1},
   mageTower: {dx:1, dy:1}
 };
 
+// ===== GAME STATE =====
 const game = {
   player: null,
   enemy: null,
@@ -164,7 +163,6 @@ function init(){
   game.gameOver = false;
   game.zoom = 1;
   game.offset = {x:0, y:0};
-  buildGrid(document.getElementById('game'));
   render();
 }
 
@@ -260,11 +258,26 @@ function currentCount(unit){
 }
 
 function applyDamageToUnit(unit, dmg, side){
+  showDamagePopup(unit.x, unit.y, dmg);
   const before = currentCount(unit);
   unit.hp = Math.max(0, unit.hp - dmg);
   const after = currentCount(unit);
   const lost = before - after;
   if(lost > 0) side.population.current = Math.max(0, side.population.current - lost);
+}
+
+// floating "-x" popup, positioned as a % of the fx-layer so it survives
+// zoom/pan and doesn't get wiped by the per-frame grid repaint (unlike a
+// cell's own textContent, which is reset every frame).
+function showDamagePopup(x, y, amount){
+  if(!game.fxLayer || x<0 || x>=W || y<0 || y>=H) return;
+  const span = document.createElement('span');
+  span.className = 'dmg-popup';
+  span.textContent = '-' + Math.max(1, Math.round(amount));
+  span.style.left = ((x + 0.5) / W * 100) + '%';
+  span.style.top = (y / H * 100) + '%';
+  game.fxLayer.appendChild(span);
+  setTimeout(() => { if(span.parentNode) span.parentNode.removeChild(span); }, 800);
 }
 
 function checkCombat(delta){
@@ -285,6 +298,7 @@ function checkCombat(delta){
         if(targetIsBuilding && stats.vsBuildingMult) dmg *= stats.vsBuildingMult;
         if(targetIsBuilding){
           target.hp -= dmg;
+          showDamagePopup(target.x, target.y, dmg);
           if(target.hp <= 0 && target.type === 'townhall'){
             gameOver(side === game.player);
           }
@@ -409,13 +423,22 @@ function deployAll(){
 }
 
 // ===== ENEMY AI =====
+function assignWorkerSide(side, res, delta){
+  if(delta > 0){
+    if(side.workers.idle <= 0) return;
+    side.workers.idle--; side.workers[res]++;
+  } else {
+    if(side.workers[res] <= 0) return;
+    side.workers[res]--; side.workers.idle++;
+  }
+}
+
 function updateAI(delta){
   const side = game.enemy;
   side.aiTimer += delta;
   if(side.aiTimer < AI_DECISION_INTERVAL) return;
   side.aiTimer = 0;
 
-  // Assign workers
   let guard = 0;
   while(side.workers.idle > 0 && guard++ < 20){
     const counts = ['food','wood','gold'].map(r => ({r, c: side.workers[r]}));
@@ -423,7 +446,6 @@ function updateAI(delta){
     assignWorkerSide(side, counts[0].r, 1);
   }
 
-  // Build buildings
   const order = ['casern','castle','mageTower'];
   for(const t of order){
     if(!side.buildings.some(b => b.type === t)){
@@ -437,7 +459,6 @@ function updateAI(delta){
     }
   }
 
-  // Build houses if needed
   if(side.population.current >= side.population.max - 2){
     const cost = BUILDING_COSTS.house;
     if(side.resources.wood >= cost.wood && side.resources.gold >= cost.gold){
@@ -446,7 +467,6 @@ function updateAI(delta){
     }
   }
 
-  // Train workers
   const totalWorkers = side.workers.idle + side.workers.food + side.workers.wood + side.workers.gold;
   if(totalWorkers < 8 && side.population.current < side.population.max && side.resources.food >= WORKER_COST.food){
     side.resources.food -= WORKER_COST.food;
@@ -454,7 +474,6 @@ function updateAI(delta){
     side.workers.idle++;
   }
 
-  // Train units
   const options = ['soldier','mage','catapult'].filter(t => side.buildings.some(b => b.type === UNIT_STATS[t].requiredBuilding));
   if(options.length && side.population.current < side.population.max){
     const type = options[randInt(0, options.length-1)];
@@ -469,29 +488,18 @@ function updateAI(delta){
     }
   }
 
-  // Auto-deploy squads at 4 units
   ['soldier','mage','catapult'].forEach(t=>{
     if(side.staging[t] >= 4 && Math.random() < 0.5) deploySquad(side, t);
   });
 }
 
-function assignWorkerSide(side, res, delta){
-  if(delta > 0){
-    if(side.workers.idle <= 0) return;
-    side.workers.idle--; side.workers[res]++;
-  } else {
-    if(side.workers[res] <= 0) return;
-    side.workers[res]--; side.workers.idle++;
-  }
-}
-
 // ===== RENDERING =====
-function buildGrid(container) {
+function buildGrid(container){
   container.innerHTML = '';
   game.cellEls = [];
-  for(let y = 0; y < H; y++) {
+  for(let y=0; y<H; y++){
     const row = [];
-    for(let x = 0; x < W; x++) {
+    for(let x=0; x<W; x++){
       const cell = document.createElement('div');
       cell.className = 'cell';
       container.appendChild(cell);
@@ -499,34 +507,53 @@ function buildGrid(container) {
     }
     game.cellEls.push(row);
   }
+  // overlay spanning the whole grid, used only for damage popups so they
+  // aren't wiped out by the per-frame cell repaint in paintGrid()
+  const fx = document.createElement('div');
+  fx.style.gridColumn = '1 / -1';
+  fx.style.gridRow = '1 / -1';
+  fx.style.position = 'relative';
+  fx.style.pointerEvents = 'none';
+  container.appendChild(fx);
+  game.fxLayer = fx;
 }
 
-function paintGrid() {
-  for(let y = 0; y < H; y++) {
-    for(let x = 0; x < W; x++) {
+function paintGrid(){
+  for(let y=0; y<H; y++){
+    for(let x=0; x<W; x++){
       const cell = game.cellEls[y][x];
       cell.textContent = '🌿';
       cell.className = 'cell';
-      cell.innerHTML = ''; // Clear previous content
     }
   }
-  const paintBuildings = (list, cls) => list.forEach(o => {
-    if(o.x < 0 || o.x >= W || o.y < 0 || o.y >= H) return;
+  const paintBuildings = (list, cls) => list.forEach(o=>{
+    if(o.x<0||o.x>=W||o.y<0||o.y>=H) return;
     const cell = game.cellEls[o.y][o.x];
     cell.textContent = BUILDING_STATS[o.type].emoji;
     cell.className = 'cell building ' + cls;
+    const maxHp = BUILDING_STATS[o.type].hp;
+    if(maxHp){
+      const pct = Math.max(0, Math.min(100, o.hp / maxHp * 100));
+      const bg = document.createElement('div');
+      bg.className = 'hp-bar-bg';
+      const fill = document.createElement('div');
+      fill.className = 'hp-bar-fill';
+      fill.style.width = pct + '%';
+      fill.style.background = pct > 50 ? '#4f8' : pct > 25 ? '#fd4' : '#f55';
+      bg.appendChild(fill);
+      cell.appendChild(bg);
+    }
   });
   paintBuildings(game.player.buildings, 'player');
   paintBuildings(game.enemy.buildings, 'enemy');
 
-  const paintUnits = (list, cls) => list.forEach(u => {
-    if(u.x < 0 || u.x >= W || u.y < 0 || u.y >= H) return;
+  const paintUnits = (list, cls) => list.forEach(u=>{
+    if(u.x<0||u.x>=W||u.y<0||u.y>=H) return;
     const cell = game.cellEls[u.y][u.x];
-    cell.innerHTML = ''; // Clear previous content
     cell.textContent = UNIT_STATS[u.type].emoji;
     cell.className = 'cell unit ' + cls;
     const c = currentCount(u);
-    if(c > 1) {
+    if(c > 1){
       const span = document.createElement('span');
       span.className = 'unit-count';
       span.textContent = c;
@@ -537,75 +564,84 @@ function paintGrid() {
   paintUnits(game.enemy.units, 'enemy');
 }
 
-function renderHUD() {
+function renderHUD(){
   const f = v => Math.floor(v);
   document.getElementById('player-food').textContent = f(game.player.resources.food);
   document.getElementById('player-wood').textContent = f(game.player.resources.wood);
   document.getElementById('player-gold').textContent = f(game.player.resources.gold);
   document.getElementById('player-pop').textContent = `${game.player.population.current}/${game.player.population.max}`;
-  document.getElementById('enemy-food').textContent = f(game.enemy.resources.food);
-  document.getElementById('enemy-wood').textContent = f(game.enemy.resources.wood);
-  document.getElementById('enemy-gold').textContent = f(game.enemy.resources.gold);
 }
 
-function renderWorkers() {
+// Worker/staging panels are built ONCE and only their text/disabled state
+// is updated every frame afterwards. Rebuilding these buttons via
+// innerHTML on every animation frame (~60/sec) was the actual cause of
+// "buttons doing nothing": replacing a button's DOM node while a tap/click
+// is still in flight (especially on mobile Safari) silently drops the
+// click event before it ever fires.
+function buildWorkerPanel(){
   const el = document.getElementById('worker-panel');
-  const w = game.player.workers;
   el.innerHTML = `
-    <span>👷 Idle: ${w.idle}</span>
-    <span>🍎 ${w.food} <button class="button" data-action="assign-food-1">+</button><button class="button" data-action="assign-food--1">-</button></span>
-    <span>🪵 ${w.wood} <button class="button" data-action="assign-wood-1">+</button><button class="button" data-action="assign-wood--1">-</button></span>
-    <span>🟡 ${w.gold} <button class="button" data-action="assign-gold-1">+</button><button class="button" data-action="assign-gold--1">-</button></span>
+    <span>👷 Idle: <b id="w-idle">0</b></span>
+    <span>🍎 <b id="w-food">0</b> <button class="button" onclick="assignWorker('food',1)">+</button><button class="button" onclick="assignWorker('food',-1)">-</button></span>
+    <span>🪵 <b id="w-wood">0</b> <button class="button" onclick="assignWorker('wood',1)">+</button><button class="button" onclick="assignWorker('wood',-1)">-</button></span>
+    <span>🟡 <b id="w-gold">0</b> <button class="button" onclick="assignWorker('gold',1)">+</button><button class="button" onclick="assignWorker('gold',-1)">-</button></span>
   `;
 }
+function renderWorkers(){
+  const w = game.player.workers;
+  document.getElementById('w-idle').textContent = w.idle;
+  document.getElementById('w-food').textContent = w.food;
+  document.getElementById('w-wood').textContent = w.wood;
+  document.getElementById('w-gold').textContent = w.gold;
+}
 
-function renderStaging() {
+function buildStagingPanel(){
   const el = document.getElementById('staging-units');
   el.innerHTML = '';
-  ['soldier','mage','catapult'].forEach(type => {
-    const n = game.player.staging[type];
+  ['soldier','mage','catapult'].forEach(type=>{
     const span = document.createElement('span');
-    span.innerHTML = `${UNIT_STATS[type].emoji} ${n}/10 `;
+    span.innerHTML = `${UNIT_STATS[type].emoji} <b id="stage-${type}">0</b>/10 `;
     const btn = document.createElement('button');
     btn.className = 'button';
+    btn.id = 'deploy-' + type;
     btn.textContent = 'Deploy';
-    btn.disabled = n === 0;
-    btn.dataset.action = `deploy-${type}`;
+    btn.onclick = () => { deploySquad(game.player, type); };
     span.appendChild(btn);
     el.appendChild(span);
   });
 }
-
-function canAfford(side, cost) {
-  return side.resources.wood >= (cost.wood||0) &&
-         side.resources.gold >= (cost.gold||0) &&
-         side.resources.food >= (cost.food||0);
-}
-
-function updateButtons() {
-  const p = game.player;
-  const setBtn = (id, disabled) => {
-    const b = document.querySelector(`[data-action="${id}"]`);
-    if(b) b.disabled = disabled;
-  };
-  setBtn('build-casern', p.buildings.some(b => b.type==='casern') || !canAfford(p, BUILDING_COSTS.casern));
-  setBtn('build-castle', p.buildings.some(b => b.type==='castle') || !canAfford(p, BUILDING_COSTS.castle));
-  setBtn('build-mageTower', p.buildings.some(b => b.type==='mageTower') || !canAfford(p, BUILDING_COSTS.mageTower));
-  setBtn('build-house', !canAfford(p, BUILDING_COSTS.house));
-  setBtn('train-worker', p.population.current >= p.population.max || p.resources.food < WORKER_COST.food);
-  ['soldier','mage','catapult'].forEach(t => {
-    const stats = UNIT_STATS[t];
-    const dis = p.population.current >= p.population.max ||
-                !p.buildings.some(b => b.type===stats.requiredBuilding) ||
-                !canAfford(p, stats.cost);
-    setBtn(`train-${t}`, dis);
+function renderStaging(){
+  ['soldier','mage','catapult'].forEach(type=>{
+    const n = game.player.staging[type];
+    document.getElementById('stage-'+type).textContent = n;
+    document.getElementById('deploy-'+type).disabled = n === 0;
   });
 }
 
-function render() {
+function canAfford(side, cost){
+  return side.resources.wood >= (cost.wood||0) && side.resources.gold >= (cost.gold||0) && side.resources.food >= (cost.food||0);
+}
+
+function updateButtons(){
+  const p = game.player;
+  const setBtn = (id, disabled) => { const b = document.getElementById(id); if(b) b.disabled = disabled; };
+  setBtn('build-casern', p.buildings.some(b=>b.type==='casern') || !canAfford(p, BUILDING_COSTS.casern));
+  setBtn('build-castle', p.buildings.some(b=>b.type==='castle') || !canAfford(p, BUILDING_COSTS.castle));
+  setBtn('build-mageTower', p.buildings.some(b=>b.type==='mageTower') || !canAfford(p, BUILDING_COSTS.mageTower));
+  setBtn('build-house', !canAfford(p, BUILDING_COSTS.house));
+  setBtn('train-worker', p.population.current >= p.population.max || p.resources.food < WORKER_COST.food);
+  ['soldier','mage','catapult'].forEach(t=>{
+    const stats = UNIT_STATS[t];
+    const dis = p.population.current >= p.population.max || !p.buildings.some(b=>b.type===stats.requiredBuilding) || !canAfford(p, stats.cost);
+    setBtn('train-'+t, dis);
+  });
+}
+
+function render(){
   const gameDiv = document.getElementById('game');
   gameDiv.style.transform = `scale(${game.zoom}) translate(${game.offset.x}px, ${game.offset.y}px)`;
   if(!game.cellEls) buildGrid(gameDiv);
+  if(!game.uiBuilt){ buildWorkerPanel(); buildStagingPanel(); game.uiBuilt = true; }
   paintGrid();
   renderHUD();
   renderWorkers();
@@ -614,58 +650,34 @@ function render() {
 }
 
 // ===== ZOOM/PAN =====
-function zoomIn() { game.zoom = Math.min(game.zoom + 0.2, 2); render(); }
-function zoomOut() { game.zoom = Math.max(game.zoom - 0.2, 0.5); render(); }
+function zoomIn(){ game.zoom = Math.min(game.zoom + 0.2, 2); render(); }
+function zoomOut(){ game.zoom = Math.max(game.zoom - 0.2, 0.5); render(); }
 
-// Touch/drag for panning
-document.getElementById('game').addEventListener('mousedown', (e) => {
+document.getElementById('game').addEventListener('mousedown', (e)=>{
   game.isDragging = true;
   game.dragStart = {x: e.clientX - game.offset.x, y: e.clientY - game.offset.y};
 });
-document.addEventListener('mousemove', (e) => {
+document.addEventListener('mousemove', (e)=>{
   if(!game.isDragging) return;
   game.offset.x = e.clientX - game.dragStart.x;
   game.offset.y = e.clientY - game.dragStart.y;
   render();
 });
-document.addEventListener('mouseup', () => { game.isDragging = false; });
+document.addEventListener('mouseup', ()=>{ game.isDragging = false; });
 
-document.getElementById('game').addEventListener('touchstart', (e) => {
+document.getElementById('game').addEventListener('touchstart', (e)=>{
   game.isDragging = true;
   game.dragStart = {x: e.touches[0].clientX - game.offset.x, y: e.touches[0].clientY - game.offset.y};
   e.preventDefault();
 });
-document.addEventListener('touchmove', (e) => {
+document.addEventListener('touchmove', (e)=>{
   if(!game.isDragging) return;
   game.offset.x = e.touches[0].clientX - game.dragStart.x;
   game.offset.y = e.touches[0].clientY - game.dragStart.y;
   render();
   e.preventDefault();
 });
-document.addEventListener('touchend', () => { game.isDragging = false; });
-
-// ===== EVENT DELEGATION (FIX FOR BUTTONS) =====
-document.addEventListener('click', (e) => {
-  const action = e.target.closest('[data-action]')?.dataset.action;
-  if (!action) return;
-
-  if (action.startsWith('build-')) {
-    const type = action.replace('build-', '');
-    build(type);
-  } else if (action.startsWith('train-')) {
-    const type = action.replace('train-', '');
-    if (type === 'worker') trainWorker();
-    else produce(type);
-  } else if (action.startsWith('deploy-')) {
-    const type = action.replace('deploy-', '');
-    deploySquad(game.player, type);
-  } else if (action === 'deployAll') {
-    deployAll();
-  } else if (action.startsWith('assign-')) {
-    const [, res, delta] = action.split('-');
-    assignWorker(res, parseInt(delta));
-  }
-});
+document.addEventListener('touchend', ()=>{ game.isDragging = false; });
 
 // ===== BOOTSTRAP =====
 init();
