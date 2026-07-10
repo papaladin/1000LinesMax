@@ -268,6 +268,42 @@ function placeAtReachablePosition(char, type, extra) {
   return true;
 }
 
+function carveRoom(x,y,w,h){ for(let dy=0;dy<h;dy++) for(let dx=0;dx<w;dx++) game.map[y+dy][x+dx]="░"; }
+function carveCorridor(x1,y1,x2,y2){
+  if(Math.random()<0.5){
+    for(let x=Math.min(x1,x2);x<=Math.max(x1,x2);x++) game.map[y1][x]="░";
+    for(let y=Math.min(y1,y2);y<=Math.max(y1,y2);y++) game.map[y][x2]="░";
+  } else {
+    for(let y=Math.min(y1,y2);y<=Math.max(y1,y2);y++) game.map[y][x1]="░";
+    for(let x=Math.min(x1,x2);x<=Math.max(x1,x2);x++) game.map[y2][x]="░";
+  }
+}
+function buildLayout(){
+  const rooms=[];
+  const roomCount = 4+Math.floor(Math.random()*3);
+  for(let i=0;i<roomCount;i++){
+    const w=3+Math.floor(Math.random()*3), h=2+Math.floor(Math.random()*3);
+    let best=null;
+    for(let t=0;t<15;t++){
+      const x=1+Math.floor(Math.random()*(W-w-1)), y=1+Math.floor(Math.random()*(H-h-1));
+      const overlaps = rooms.some(r=> x<r.x+r.w+3 && x+w+3>r.x && y<r.y+r.h+3 && y+h+3>r.y);
+      if(!overlaps){ best={x,y,w,h}; break; }
+      if(!best) best={x,y,w,h}; // fallback if all attempts overlap
+    }
+    rooms.push(best); carveRoom(best.x,best.y,best.w,best.h);
+  }
+  // connect rooms in sequence (guarantees full connectivity)
+  for(let i=1;i<rooms.length;i++){
+    const a=rooms[i-1], b=rooms[i];
+    carveCorridor(Math.floor(a.x+a.w/2),Math.floor(a.y+a.h/2),Math.floor(b.x+b.w/2),Math.floor(b.y+b.h/2));
+  }
+  // occasional extra loop connection between random rooms for variety
+  if(Math.random()<0.5){
+    const a=rooms[Math.floor(Math.random()*rooms.length)], b=rooms[Math.floor(Math.random()*rooms.length)];
+    if(a!==b) carveCorridor(Math.floor(a.x+a.w/2),Math.floor(a.y+a.h/2),Math.floor(b.x+b.w/2),Math.floor(b.y+b.h/2));
+  }
+}
+
 function placeSecretRoom(){
   if(Math.random()>=0.45) return;
   for(let tries=0; tries<25; tries++){
@@ -292,11 +328,7 @@ function generateDungeon() {
   game.seen=Array(H).fill().map(()=>Array(W).fill(false));
   game.enemies=[];game.items=[];game.traps=[];game.secretDoor=null;game.secretRoom=null;
 
-  for(let i=0;i<6;i++) {
-    const w=3+Math.floor(Math.random()*5),h=3+Math.floor(Math.random()*4);
-    const x=1+Math.floor(Math.random()*(W-w-1)),y=1+Math.floor(Math.random()*(H-h-1));
-    for(let dy=0;dy<h;dy++) for(let dx=0;dx<w;dx++) game.map[y+dy][x+dx]="░";
-  }
+  buildLayout();
 
   let x,y;do{x=Math.floor(Math.random()*W);y=Math.floor(Math.random()*H)}while(game.map[y][x]!="░");
   game.player.x=x;game.player.y=y;
