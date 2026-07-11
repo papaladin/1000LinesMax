@@ -83,7 +83,9 @@ body{font-family:monospace;background:#000;color:#fff;margin:0;padding:0;height:
 // ===== CONSTANTS =====
 const W=40, H=40;
 const MOVE_RETRY=0.15;
-const AI_DECISION_INTERVAL=3;
+const AI_STARTUP_DELAY=12;   // seconds before the AI does anything at all
+const AI_MIN_INTERVAL=3, AI_MAX_INTERVAL=6; // seconds between AI "thinks"
+const AI_SKIP_CHANCE=0.2;    // chance the AI does nothing on a given think, to mimic hesitation
 const RES_INTERVAL={food:2, wood:5, gold:5};
 const RES_AMOUNT={food:4, wood:5, gold:3};
 const WORKER_COST={food:10};
@@ -123,7 +125,8 @@ const game = {
   dragStart: {x:0, y:0},
   lastTs: 0,
   gameOver: false,
-  cellEls: null
+  cellEls: null,
+  elapsed: 0
 };
 
 function newSide(tx, ty){
@@ -137,7 +140,8 @@ function newSide(tx, ty){
     resources: {food:150, wood:150, gold:100},
     resTimers: {food:0, wood:0, gold:0},
     population: {current:0, max:10},
-    aiTimer: 0
+    aiTimer: 0,
+    nextDecision: AI_MIN_INTERVAL + Math.random() * (AI_MAX_INTERVAL - AI_MIN_INTERVAL)
   };
 }
 
@@ -163,6 +167,7 @@ function init(){
   game.gameOver = false;
   game.zoom = 1;
   game.offset = {x:0, y:0};
+  game.elapsed = 0;
   render();
 }
 
@@ -172,6 +177,7 @@ function gameLoop(ts){
   game.lastTs = ts;
   try{
     if(!game.gameOver && !game.isDragging){
+      game.elapsed += delta;
       updateResources(delta);
       moveUnits(delta);
       checkCombat(delta);
@@ -229,22 +235,36 @@ function stepToward(unit, target, side){
   return null;
 }
 
+// nearest thing to fight/advance toward: an enemy squad or the enemy townhall,
+// whichever is closer right now. Recomputed every tick, so two squads that
+// started on different lines will bend toward each other instead of only
+// fighting if they happen to cross paths on the way to the townhall.
+function findMoveTarget(unit, foe){
+  let best = foe.townhall;
+  let bestDist = Math.max(Math.abs(foe.townhall.x-unit.x), Math.abs(foe.townhall.y-unit.y));
+  foe.units.forEach(u=>{
+    if(u.hp <= 0) return;
+    const d = Math.max(Math.abs(u.x-unit.x), Math.abs(u.y-unit.y));
+    if(d < bestDist){ bestDist = d; best = u; }
+  });
+  return {target: best, dist: bestDist};
+}
+
 function moveUnits(delta){
   [[game.player, game.enemy], [game.enemy, game.player]].forEach(([side, foe])=>{
     side.units.forEach(unit=>{
       if(unit.hp <= 0) return;
       const stats = UNIT_STATS[unit.type];
-      const engaging = foe.units.some(u => u.hp>0 && Math.max(Math.abs(u.x-unit.x), Math.abs(u.y-unit.y)) <= stats.range);
-      if(engaging) return;
+      const {target, dist} = findMoveTarget(unit, foe);
+
+      if(dist <= stats.range){
+        unit.moveCd = 0.3;
+        return; // in range of something worth fighting, stand and fight
+      }
 
       unit.moveCd -= delta;
       if(unit.moveCd > 0) return;
 
-      const target = foe.townhall;
-      if(Math.max(Math.abs(unit.x-target.x), Math.abs(unit.y-target.y)) <= stats.range){
-        unit.moveCd = 0.3;
-        return;
-      }
       const next = stepToward(unit, target, side);
       if(next){ unit.x = next.x; unit.y = next.y; unit.moveCd = stats.moveTime; }
       else unit.moveCd = MOVE_RETRY;
@@ -435,43 +455,62 @@ function assignWorkerSide(side, res, delta){
 
 function updateAI(delta){
   const side = game.enemy;
-  side.aiTimer += delta;
-  if(side.aiTimer < AI_DECISION_INTERVAL) return;
-  side.aiTimer = 0;
+  if(game.elapsed < AI_STARTUP_DELAY) return; // give the player a head start, like a human noticing the game has started
 
-  let guard = 0;
-  while(side.workers.idle > 0 && guard++ < 20){
-    const counts = ['food','wood','gold'].map(r => ({r, c: side.workers[r]}));
-    counts.sort((a,b) => a.c - b.c);
-    assignWorkerSide(side, counts[0].r, 1);
+  side.aiTimer += delta;
+  if(side.aiTimer < side.nextDecision) return;
+  side.aiTimer = 0;
+  side.nextDecision = AI_MIN_INTERVAL + Math.random() * (AI_MAX_INTERVAL - AI_MIN_INTERVAL);
+
+  // simulate hesitation/imperfect play: sometimes the AI just doesn't act this cycle
+  if(Math.random() < AI_SKIP_CHANCE) return;
+
+  // Gather every action the AI could take right now, each with a weight,
+  // then do exactly ONE, chosen at random proportional to weight. Deploying
+  // a squad that's ready is weighted heavily so a built-up army doesn't sit
+  // in staging forever just because "train one more worker" kept winning
+  // the coin flip - that was the previous bug (staged 6 soldiers, then
+  // idled for a full minute re-rolling economy actions before attacking).
+  const actions = [];
+
+  if(side.workers.idle > 0){
+    actions.push({weight:2, run: () => {
+      const counts = ['food','wood','gold'].map(r => ({r, c: side.workers[r]}));
+      counts.sort((a,b) => a.c - b.c);
+      assignWorkerSide(side, counts[0].r, 1);
+    }});
   }
 
-  const order = ['casern','castle','mageTower'];
-  for(const t of order){
-    if(!side.buildings.some(b => b.type === t)){
-      const cost = BUILDING_COSTS[t];
-      if(side.resources.wood >= cost.wood && side.resources.gold >= cost.gold){
+  const buildOrder = ['casern','castle','mageTower'];
+  const missing = buildOrder.find(t => !side.buildings.some(b => b.type === t));
+  if(missing){
+    const cost = BUILDING_COSTS[missing];
+    if(side.resources.wood >= cost.wood && side.resources.gold >= cost.gold){
+      actions.push({weight:2, run: () => {
         side.resources.wood -= cost.wood; side.resources.gold -= cost.gold;
-        const slot = BASE_SLOTS[t];
-        side.buildings.push({x:side.townhall.x+slot.dx, y:side.townhall.y+slot.dy, hp:BUILDING_STATS[t].hp, type:t});
-      }
-      break;
+        const slot = BASE_SLOTS[missing];
+        side.buildings.push({x:side.townhall.x+slot.dx, y:side.townhall.y+slot.dy, hp:BUILDING_STATS[missing].hp, type:missing});
+      }});
     }
   }
 
   if(side.population.current >= side.population.max - 2){
     const cost = BUILDING_COSTS.house;
     if(side.resources.wood >= cost.wood && side.resources.gold >= cost.gold){
-      side.resources.wood -= cost.wood; side.resources.gold -= cost.gold;
-      side.population.max += BUILDING_STATS.house.population;
+      actions.push({weight:1, run: () => {
+        side.resources.wood -= cost.wood; side.resources.gold -= cost.gold;
+        side.population.max += BUILDING_STATS.house.population;
+      }});
     }
   }
 
   const totalWorkers = side.workers.idle + side.workers.food + side.workers.wood + side.workers.gold;
   if(totalWorkers < 8 && side.population.current < side.population.max && side.resources.food >= WORKER_COST.food){
-    side.resources.food -= WORKER_COST.food;
-    side.population.current++;
-    side.workers.idle++;
+    actions.push({weight:2, run: () => {
+      side.resources.food -= WORKER_COST.food;
+      side.population.current++;
+      side.workers.idle++;
+    }});
   }
 
   const options = ['soldier','mage','catapult'].filter(t => side.buildings.some(b => b.type === UNIT_STATS[t].requiredBuilding));
@@ -479,18 +518,37 @@ function updateAI(delta){
     const type = options[randInt(0, options.length-1)];
     const cost = UNIT_STATS[type].cost;
     if(side.resources.food >= (cost.food||0) && side.resources.gold >= (cost.gold||0) && side.resources.wood >= (cost.wood||0)){
-      side.resources.food -= cost.food||0;
-      side.resources.gold -= cost.gold||0;
-      side.resources.wood -= cost.wood||0;
-      side.population.current++;
-      side.staging[type]++;
-      if(side.staging[type] >= 10) deploySquad(side, type);
+      actions.push({weight:2, run: () => {
+        side.resources.food -= cost.food||0;
+        side.resources.gold -= cost.gold||0;
+        side.resources.wood -= cost.wood||0;
+        side.population.current++;
+        side.staging[type]++;
+        if(side.staging[type] >= 10) deploySquad(side, type);
+      }});
     }
   }
 
   ['soldier','mage','catapult'].forEach(t=>{
-    if(side.staging[t] >= 4 && Math.random() < 0.5) deploySquad(side, t);
+    if(side.staging[t] >= 4){
+      // heavily favored, and always actually deploys once chosen -
+      // no second coin flip on top of the weighting
+      actions.push({weight:4, run: () => deploySquad(side, t)});
+    }
   });
+
+  if(actions.length === 0) return;
+  pickWeighted(actions)();
+}
+
+function pickWeighted(actions){
+  const total = actions.reduce((sum,a) => sum + a.weight, 0);
+  let r = Math.random() * total;
+  for(const a of actions){
+    if(r < a.weight) return a.run;
+    r -= a.weight;
+  }
+  return actions[actions.length-1].run;
 }
 
 // ===== RENDERING =====
